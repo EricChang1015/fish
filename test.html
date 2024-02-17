@@ -20,6 +20,14 @@
     let cannon = {x: 100, y: canvas.height - 50, width: 20, height: 50}; // 初始炮台位置
     let fishes = []; // 存储鱼的数组
     let bullets = [];
+    let fishImages = {
+        'Fish_001': new Image(),
+        'Fish_002': new Image()
+        // ...其他魚的圖片...
+    };
+
+    fishImages['Fish_001'].src = 'public/assets/img/fish_001.png';
+    fishImages['Fish_002'].src = 'public/assets/img/fish_002.png';
 
     // 创建WebSocket连接
     let ws = new WebSocket('ws://localhost:8080');
@@ -183,27 +191,13 @@
 
     }
 
-
     function drawFish(fish) {
-        // 根据鱼的类型绘制不同的图片
-        let fishImage = new Image();
-        fishImage.src = getFishImageSrc(fish.type); // 根据鱼的类型获取图片源
-        if (fishImage && fishImage.complete) {  // 确保图片已加载完成
-            // 调整绘制坐标以使鱼的中心在(x, y)上
+        let fishImage = fishImages[fish.type] || fishImages['default'];
+        if (fishImage && fishImage.complete) {
             const x = fish.x - fishImage.width / 2;
             const y = fish.y - fishImage.height / 2;
             ctx.drawImage(fishImage, x, y);
         }
-    }
-
-    function getFishImageSrc(fishType) {
-        // 返回对应鱼类型的图片URL
-        let fishImages = {
-            'Fish_001': 'public/assets/img/fish_001.png',
-            'Fish_002': 'public/assets/img/fish_002.png'
-            // ...其他鱼的图片...
-        };
-        return fishImages[fishType] || 'path/to/default_fish.png';
     }
 
     update();

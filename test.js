@@ -21,7 +21,6 @@ wss.on('connection', function connection(ws) {
 
     // 接收來自客戶端的訊息
     ws.on('message', function incoming(message) {
-        console.log('received: %s', message);
 		const data = JSON.parse(message);
         // 把訊息發送給所有連接的客戶端
         wss.clients.forEach(function each(client) {
@@ -52,10 +51,12 @@ setInterval(() => {
 }, 3000); // 3000毫秒间隔
 
 function sendFish(ws) {
+    const fishTypes = ["Fish_001", "Fish_002"];
     const fishInfo = {
         action: "fish",
         fish: {
-            type: "Fish_001",
+            // random from fishTypes
+            type: fishTypes[Math.floor(Math.random() * fishTypes.length)],
             id: "f01_" + generateRandomString(6),
             x: 800,
             y: 300,
