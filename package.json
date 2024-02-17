@@ -1,0 +1,15 @@
+{
+  "name": "20240216_gpt4",
+  "version": "1.0.0",
+  "main": "test.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "keywords": [],
+  "description": "",
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
