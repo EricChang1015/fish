@@ -16,7 +16,7 @@
     let canvas = document.getElementById('gameCanvas');
     let ctx = canvas.getContext('2d');
     let playerPosition = null; // 玩家位置：0为左侧，1为右侧
-    let opponentPosition = {x: 100, y: 50}; // 假设对手初始位置在左上角
+    let opponentPosition = {x: 100, y: 50}; // 假设对手初始位置在右侧
     let cannon = {x: 100, y: canvas.height - 50, width: 20, height: 50}; // 初始炮台位置
     let fishes = []; // 存储鱼的数组
     let bullets = [];

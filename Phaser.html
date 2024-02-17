@@ -2,48 +2,155 @@
 <html>
 <head>
     <title>简易捕鱼游戏Demo - Phaser版本</title>
-    <script src="public/libs/phaser.min.js"></script>
+    <script src="public/libs/phaser.js"></script>
 </head>
 <body>
 <script>
     class MainScene extends Phaser.Scene {
         preload() {
-            // 预加载资源
+            // 预加载资源，路径需要替换为您实际的资源路径
             this.load.image('fish1', 'public/assets/img/fish_001.png');
             this.load.image('fish2', 'public/assets/img/fish_002.png');
-            // 加载更多鱼的图像...
+            // 加载子弹图像
+            this.load.image('bullet', 'public/assets/img/bullet.png');
         }
 
         create() {
             // 初始化炮台，鱼，和子弹的组
-            this.cannon = this.add.rectangle(400, 550, 40, 50, 0x0000ff);
-            this.opponentCannon = this.add.rectangle(400, 50, 40, 50, 0xff0000);
+            this.cannon1 = this.add.rectangle(100, config.height, 40, 50, 0x0000ff);
+            this.cannon2 = this.add.rectangle(config.width-100, config.height, 40, 50, 0xff0000);
+            this.playerPosition = 1; // 玩家位置：0为左侧，1为右侧
+            this.cannon = this.cannon2; // 初始炮台位置
+            this.cannonOpposite = this.cannon1;
+            console.log('playerPosition:', this.playerPosition, 'cannon.x:', this.cannon.x, 'cannon.y:', this.cannon.y);
 
             this.fishes = this.physics.add.group();
             this.bullets = this.physics.add.group();
 
-            // 示例添加鱼
-            this.addFish();
-
             // 点击发射子弹
             this.input.on('pointerdown', this.shootBullet, this);
+            // 示例添加鱼
+            this.addFish('fish1', 800, 300, 100);
+            // 这里可以通过socket或者其他方式接收服务器的鱼数据，然后生成鱼
+            this.websocketHandler();
+        }
+
+        websocketHandler() {
+            let _this = this;
+            // 创建WebSocket连接
+            let ws = new WebSocket('ws://localhost:8080');
+            ws.onopen = function () {
+                console.log('WebSocket connection established');
+            };
+            ws.onmessage = function (event) {
+                let data = JSON.parse(event.data);
+                if (data.result !== undefined) {
+                    console.log(data.result.hit ? '击中' : '未击中')
+                    let fishIndex = fishes.findIndex(fish => fish.id === data.result.fish.id);
+                    if (fishIndex >= 0) {
+                        if (data.result.hit) {
+                            // 如果击中，从数组中移除鱼
+                            this.fishes.splice(fishIndex, 1);
+                        } else {
+                            // 如果未击中，处理其他逻辑，比如鱼闪烁效果
+                            // ...
+                        }
+                    }
+                    return;
+                }
+                switch (data.action) {
+                    case 'setPosition':
+                        _this.playerPosition = data.position;
+                        // 根据分配的位置调整炮台位置
+                        _this.cannon = _this.playerPosition === 0 ? _this.cannon1 : _this.cannon2;
+                        _this.cannonOpposite = _this.playerPosition === 1 ? _this.cannon1 : _this.cannon2;
+                        break;
+                    case 'fireBullet': { // 接收新的炮弹数据并添加到bullets数组中
+                        _this.showBullet(data.bullet.x, data.bullet.y, data.bullet.rotation, data.bullet.speed);
+                    }
+                        break;
+                    case 'fish': // 添加鱼到数组
+                        //fishes.push(data.fish);
+                        break;
+
+                    case 'error':
+                        alert(data.message); // 显示错误消息
+                        break;
+                }
+            };
+            this.ws = ws;
         }
 
         update() {
-            // 这里可以添加游戏逻辑，例如移动鱼等
+            // 游戏逻辑更新，比如鱼的移动等
         }
 
-        addFish() {
+
+    // {
+    //     "action": "fish",
+    //     "fish": {
+    //         "type": "Fish_001",
+    //         "id": "f01_gR5NHC",
+    //         "x": 800,
+    //         "y": 300,
+    //         "angle": 4.8509796610083855,
+    //         "speed": 0.5,
+    //         "timestamp": 1708174385607
+    //     }
+    // }
+        addFish(fishType, x, y, speed) {
             // 添加鱼到游戏中
-            let fish = this.fishes.create(Phaser.Math.Between(0, 800), Phaser.Math.Between(0, 600), 'fish1');
-            fish.setVelocity(Phaser.Math.Between(-100, 100), Phaser.Math.Between(-100, 100));
+            let fish = this.fishes.create(x, y, fishType);
+            // 根据服务器提供的速度和角度信息来设置鱼的移动
+            fish.setData('speed', speed);
+            // 假设这里的角度是以弧度为单位
+            fish.body.velocity.x = Math.cos(Phaser.Math.DegToRad(0)) * speed;
+            fish.body.velocity.y = Math.sin(Phaser.Math.DegToRad(0)) * speed;
+            fish.setCollideWorldBounds(true);
+            fish.setBounce(1);
+        }
+        addFish2(data) {
+            // 添加鱼到游戏中
+            let fish = this.fishes.create(data);
+            // 根据服务器提供的速度和角度信息来设置鱼的移动
+            fish.setData('speed', data.speed);
+            // 設置魚的移動角度
+            fish.setData('angle', data.angle);
+            // 移動魚
+            this.physics.velocityFromRotation(data.angle, data.speed, fish.body.velocity);
             fish.setCollideWorldBounds(true);
             fish.setBounce(1);
         }
 
         shootBullet(pointer) {
-            let bullet = this.bullets.create(this.cannon.x, this.cannon.y, 'bullet'); // 假设有个子弹的图像为'bullet'
-            this.physics.moveTo(bullet, pointer.x, pointer.y, 600);
+            console.log('playerPosition:', this.playerPosition, 'cannon.x:', this.cannon.x, 'cannon.y:', this.cannon.y);
+            let bullet = this.bullets.create(this.cannon.x, this.cannon.y-25, 'bullet');
+            bullet.setDisplaySize(100, 100);
+            // set the rotation of the bullet to pointer
+            bullet.rotation = this.physics.moveToObject(bullet, pointer,config.bulletSpeed);
+            console.log(bullet.rotation);
+            //this.physics.moveTo(bullet, pointer.x, pointer.y);
+            // 子弹的碰撞检测
+            this.physics.add.collider(bullet, this.fishes, this.hitFish, null, this);
+
+            let data = {
+                x: this.cannon.x,
+                y: this.cannon.y,
+                rotation: bullet.rotation,
+                speed: config.bulletSpeed,
+                timestamp: Date.now(),
+                owner: this.playerPosition,
+                id: generateBulletID()
+            };
+            this.ws.send(JSON.stringify({action: 'fireBullet', bullet: data}));
+        }
+
+        showBullet(x, y, rotation, speed) {
+            // 发射子弹
+            let bullet = this.bullets.create(this.cannonOpposite.x, this.cannonOpposite.y, 'bullet');
+            bullet.setDisplaySize(100, 100);
+            bullet.rotation = rotation;
+            this.physics.velocityFromRotation(rotation, speed, bullet.body.velocity);
             // 子弹的碰撞检测
             this.physics.add.collider(bullet, this.fishes, this.hitFish, null, this);
         }
@@ -52,7 +159,24 @@
             // 击中鱼的处理
             fish.destroy();
             bullet.destroy();
+            // 这里可以发送击中信息给服务器
+            //{"action":"hit","fish":{"type":"Fish_001","id":"f01_vDQvbz"},"bullet":{"id":"x8gCEtet0qJO"}}
+            this.ws.send(JSON.stringify({action: 'hit', fish: {type: fish.texture.key, id: fish.id}, bullet: {id: bullet.id}}));
         }
+    }
+
+    function generateBulletID() {
+        return generateRandomString(12)
+    }
+
+    function generateRandomString(length) {
+        let result = '';
+        let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let charactersLength = characters.length;
+        for (let i = 0; i < length; i++) {
+            result += characters.charAt(Math.floor(Math.random() * charactersLength));
+        }
+        return result;
     }
 
     const config = {
@@ -60,6 +184,7 @@
         parent: 'phaser-example',
         width: 800,
         height: 600,
+        bulletSpeed: 600,
         physics: {
             default: 'arcade',
             arcade: {
