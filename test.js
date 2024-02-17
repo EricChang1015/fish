@@ -33,6 +33,7 @@ wss.on('connection', function connection(ws) {
         if (data.action === 'hit') {
             // 处理击中逻辑
             const result = processHit(data.fish, data.bullet);
+            console.log('transaction:', result.result.transaction.id, 'hit:', result.result.hit, 'fish:', result.result.fish.id, 'bullet:', result.result.bullet.id);
             ws.send(JSON.stringify(result)); // 发送捕获结果
         }
     });
