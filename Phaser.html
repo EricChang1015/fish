@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>简易捕鱼游戏Demo - Phaser版本</title>
+    <script src="public/libs/phaser.min.js"></script>
+</head>
+<body>
+<script>
+    class MainScene extends Phaser.Scene {
+        preload() {
+            // 预加载资源
+            this.load.image('fish1', 'public/assets/img/fish_001.png');
+            this.load.image('fish2', 'public/assets/img/fish_002.png');
+            // 加载更多鱼的图像...
+        }
+
+        create() {
+            // 初始化炮台，鱼，和子弹的组
+            this.cannon = this.add.rectangle(400, 550, 40, 50, 0x0000ff);
+            this.opponentCannon = this.add.rectangle(400, 50, 40, 50, 0xff0000);
+
+            this.fishes = this.physics.add.group();
+            this.bullets = this.physics.add.group();
+
+            // 示例添加鱼
+            this.addFish();
+
+            // 点击发射子弹
+            this.input.on('pointerdown', this.shootBullet, this);
+        }
+
+        update() {
+            // 这里可以添加游戏逻辑，例如移动鱼等
+        }
+
+        addFish() {
+            // 添加鱼到游戏中
+            let fish = this.fishes.create(Phaser.Math.Between(0, 800), Phaser.Math.Between(0, 600), 'fish1');
+            fish.setVelocity(Phaser.Math.Between(-100, 100), Phaser.Math.Between(-100, 100));
+            fish.setCollideWorldBounds(true);
+            fish.setBounce(1);
+        }
+
+        shootBullet(pointer) {
+            let bullet = this.bullets.create(this.cannon.x, this.cannon.y, 'bullet'); // 假设有个子弹的图像为'bullet'
+            this.physics.moveTo(bullet, pointer.x, pointer.y, 600);
+            // 子弹的碰撞检测
+            this.physics.add.collider(bullet, this.fishes, this.hitFish, null, this);
+        }
+
+        hitFish(bullet, fish) {
+            // 击中鱼的处理
+            fish.destroy();
+            bullet.destroy();
+        }
+    }
+
+    const config = {
+        type: Phaser.AUTO,
+        parent: 'phaser-example',
+        width: 800,
+        height: 600,
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: {y: 0},
+                debug: false
+            }
+        },
+        scene: MainScene
+    };
+
+    const game = new Phaser.Game(config);
+</script>
+</body>
+</html>
