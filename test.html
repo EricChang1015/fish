@@ -18,6 +18,7 @@
     let playerPosition = null; // 玩家位置：0为左侧，1为右侧
     let opponentPosition = {x: 100, y: 50}; // 假设对手初始位置在右侧
     let cannon = {x: 100, y: canvas.height - 50, width: 20, height: 50}; // 初始炮台位置
+    let bulletSpeed = 0.5; // 子弹速度
     let fishes = []; // 存储鱼的数组
     let bullets = [];
     let fishImages = {
@@ -67,7 +68,7 @@
             case 'fireBullet': { // 接收新的炮弹数据并添加到bullets数组中
                 let now = Date.now();
                 let delay = now - data.bullet.timestamp; // 计算延迟
-                let distance = (delay / 1000) * data.bullet.speed; // 假设速度单位是像素/秒，计算延迟时间内炮弹应该移动的距离
+                let distance = (delay / 1000) * bulletSpeed; // 假设速度单位是像素/秒，计算延迟时间内炮弹应该移动的距离
                 // 根据延迟调整炮弹的初始位置
                 data.bullet.x += distance * Math.cos(data.bullet.angle);
                 data.bullet.y += distance * Math.sin(data.bullet.angle);
@@ -148,14 +149,14 @@
             // 根据实际经过的时间来更新位置
             let timeElapsed = (now - bullet.timestamp); // 计算自发射以来经过的毫秒数
             // 根据时间差和速度计算当前应该在的位置
-            let distance = timeElapsed * bullet.speed; // 计算炮弹应该移动的距离
+            let distance = timeElapsed * bulletSpeed; // 计算炮弹应该移动的距离
             bullet.x += distance * Math.cos(bullet.angle);
             bullet.y += distance * Math.sin(bullet.angle);
             // 更新炮弹时间戳为当前时间
             bullet.timestamp = now;
             ctx.beginPath();
             ctx.arc(bullet.x, bullet.y, 5, 0, 2 * Math.PI);
-            ctx.fillStyle = bullet.owner === playerPosition ? 'blue' : 'red'; // 区分玩家和对手的炮弹颜色
+            ctx.fillStyle = bullet.position === playerPosition ? 'blue' : 'red'; // 区分玩家和对手的炮弹颜色
             ctx.fill();
             if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
                 bullets.splice(index, 1);
