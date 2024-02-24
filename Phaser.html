@@ -10,7 +10,8 @@
     class MainScene extends Phaser.Scene {
         preload() {
             // 预加载资源，路径需要替换为您实际的资源路径
-            this.load.image('sea', 'public/assets/img/bg.jpg');
+            this.load.image('undersea', 'public/assets/img/bg.jpg');
+            this.load.image('coral', 'public/assets/img/seabed.png');
             this.load.image('Fish_001', 'public/assets/img/fish_001.png');
             this.load.image('Fish_002', 'public/assets/img/fish_002.png');
             this.load.image('cannon_head', 'public/assets/img/cannon_head.png');
@@ -20,15 +21,21 @@
             this.load.audioSprite('sfx', 'public/assets/audio/fx_mixdown.json', [
                 'public/assets/audio/fx_mixdown.ogg'
             ]);
+
+            // 加载鱼的动画
+            this.load.atlas('sea', 'public/assets/animations/seacreatures_json.png', 'public/assets/animations/seacreatures_json.json');
+
         }
 
         create() {
             // size of the game
-            this.add.image(400, 300, 'sea');
+            this.add.image(400, 300, 'undersea');
+            this.add.image(0, 466, 'coral').setOrigin(0);
+
             // 初始化炮台，鱼，和子弹的组
-            this.cannon1Head = this.add.image(100, config.height-48, 'cannon_head').setDepth(1);
+            this.cannon1Head = this.add.image(100, config.height - 48, 'cannon_head').setDepth(1);
             this.add.image(100, config.height, 'cannon_body').setDepth(1);
-            this.cannon2Head = this.add.image(config.width - 100, config.height-48, 'cannon_head').setDepth(1);
+            this.cannon2Head = this.add.image(config.width - 100, config.height - 48, 'cannon_head').setDepth(1);
             this.add.image(config.width - 100, config.height, 'cannon_body').setDepth(1);
             this.playerPosition = 1; // 玩家位置：0为左侧，1为右侧
             this.cannon = this.cannon2Head; // 初始炮台位置
@@ -37,25 +44,51 @@
 
             this.cannon1Balance = 1000;
             this.cannon2Balance = 1000;
-            this.cannonBalanceText = [{},{}];
-            this.cannonBalanceText[0] =  this.add.text(10, 10, `Balance: ${this.cannon1Balance}`, { fontSize: '16px', fill: '#FFF' });
-            this.cannonBalanceText[1] =  this.add.text(600, 10, `Balance: ${this.cannon2Balance}`, { fontSize: '16px', fill: '#FFF' });
+            this.cannonBalanceText = [{}, {}];
+            this.cannonBalanceText[0] = this.add.text(10, 10, `Balance: ${this.cannon1Balance}`, {
+                fontSize: '16px',
+                fill: '#FFF'
+            });
+            this.cannonBalanceText[1] = this.add.text(600, 10, `Balance: ${this.cannon2Balance}`, {
+                fontSize: '16px',
+                fill: '#FFF'
+            });
 
             this.fishes = this.physics.add.group();
             this.bullets = this.physics.add.group();
 
-            this.input.on('pointermove', (pointer) =>
-            {
+            this.input.on('pointermove', (pointer) => {
                 this.cannon = this.playerPosition === 0 ? this.cannon1Head : this.cannon2Head;
                 angle = Phaser.Math.Angle.BetweenPoints(this.cannon, pointer);
                 this.cannon.rotation = angle;
             });
+            this.anims.create({
+                key: 'stingray',
+                frames: this.anims.generateFrameNames('sea', {prefix: 'stingray', end: 23, zeroPad: 4}),
+                repeat: -1
+            });
+            const ray = this.add.sprite(100, 300, 'seacreatures').play('stingray');
+            // 初始翻轉stingray
+            ray.scaleX = -1; // 將stingray翻轉
+            this.previousX = ray.x; // 保存ray的x位置
+            // 移動ray並在移動方向改變時翻轉
+            this.tweens.add({
+                targets: ray,
+                x: 800,
+                y: 300,
+                duration: 10000,
+                ease: 'Power1',
+                repeat: -1,
+                yoyo: true
+            });
+            this.ray = ray;
+
 
             // 点击发射子弹
             this.input.on('pointerdown', this.shootBullet, this);
             // 示例添加鱼
             this.addFish('Fish_001', 800, 300, 100, 'firstFish');
-            this.addFish('Fish_002', 0, 400, 100, 'secondFish');
+            //this.addFish('Fish_002', 0, 400, 100, 'secondFish');
 
             // 这里可以通过socket或者其他方式接收服务器的鱼数据，然后生成鱼
             this.websocketHandler();
@@ -133,13 +166,27 @@
         }
 
         update() {
-            let prev;
-
-            for (const fish of this.fishes.getChildren())
-            {
-                fish.rotation = fish.body.angle;
-                prev = fish;
+            for (const fish of this.fishes.getChildren()) {
+                // 檢查ray的x位置是否變化，以確定是否需要翻轉
+                let previousX = fish.getData('previousX');
+                let diff = fish.body.x - previousX;
+                if (Math.abs(diff) > 1) {
+                    if (diff > 0) {
+                        fish.scaleX = -1; // 向右移動
+                    } else if (diff < 0) {
+                        fish.scaleX = 1; // 向左移動
+                    }
+                }
+                fish.setData('previousX', fish.body.x); // 更新前一位置，以便下次比較
             }
+
+            // 檢查ray的x位置是否變化，以確定是否需要翻轉
+            if (this.ray.x > this.previousX) {
+                this.ray.scaleX = -1; // 向右移動
+            } else if (this.ray.x < this.previousX) {
+                this.ray.scaleX = 1; // 向左移動
+            }
+            this.previousX = this.ray.x; // 更新前一位置，以便下次比較
         }
 
 
@@ -161,6 +208,7 @@
             // 根据服务器提供的速度和角度信息来设置鱼的移动
             fish.setData('speed', speed);
             fish.setData('id', id);
+            fish.setData('previousX', x);
             // 假设这里的角度是以弧度为单位
             fish.body.mass = config.fishMass;
             fish.body.velocity.x = Math.cos(Phaser.Math.DegToRad(0)) * speed;

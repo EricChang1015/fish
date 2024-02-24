@@ -58,7 +58,7 @@ setInterval(() => {
         //     }
         // });
     }
-}, 3000); // 3000毫秒间隔
+}, 30000); // 3000毫秒间隔
 
 function getFish() {
     const fishTypes = ["Fish_001", "Fish_002"];

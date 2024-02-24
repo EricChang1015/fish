@@ -1,9 +1,9 @@
 {
   "name": "20240216_gpt4",
   "version": "1.0.0",
-  "main": "test.js",
+  "main": "backend.js",
   "scripts": {
-    "test": "node test.js"
+    "test": "node backend.js"
   },
   "author": "",
   "license": "ISC",
