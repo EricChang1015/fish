@@ -3,6 +3,7 @@ const wss = new WebSocket.Server({port: 8080});
 
 let positions = [null, null]; // 兩個位置，初始時都是空的
 let players = [{}, {}]; // 用來保存玩家的balance數據
+const fishTypes = ["Fish_001", "Fish_002", "Fish_003", "Fish_004", "Fish_005"];
 
 wss.on('connection', function connection(ws) {
     console.log('A client connected');
@@ -12,6 +13,9 @@ wss.on('connection', function connection(ws) {
         players[index].balance = 1000; // 初始化玩家的balance
         ws.send(JSON.stringify({action: 'setPosition', position: index})); // 通知玩家其位置
         ws.send(JSON.stringify({action: "setPosition", position: index, balance: players[index].balance}));
+
+        const fishInfo = getFish();
+        broadcast(fishInfo);
     } else {
         ws.send(JSON.stringify({action: 'error', message: '尚無空位'}));
         ws.close(); // 沒有位置時關閉連接
@@ -52,19 +56,15 @@ setInterval(() => {
     if (positions.some(position => position !== null)) {
         const fishInfo = getFish();
         broadcast(fishInfo);
-        // wss.clients.forEach(function each(client) {
-        //     if (client.readyState === WebSocket.OPEN) {
-        //         client.send(JSON.stringify(fishInfo));
-        //     }
-        // });
     }
-}, 30000); // 3000毫秒间隔
+}, 5000); // 3000毫秒间隔
 
 function getFish() {
-    const fishTypes = ["Fish_001", "Fish_002"];
     const xPosition = [0, 800];
+    const yPosition = [100,200, 300, 400, 500];
     const angleOffset = [0, 180];
-    const positionIndex = Math.floor(Math.random() * xPosition.length)
+    const xPositionIndex = Math.floor(Math.random() * xPosition.length)
+    const yPositionIndex = Math.floor(Math.random() * yPosition.length)
 
     // angle
     // when x = 0, angle from +60% to -60%
@@ -75,9 +75,9 @@ function getFish() {
             // random from fishTypes
             type: fishTypes[Math.floor(Math.random() * fishTypes.length)],
             id: "f01_" + generateRandomString(6),
-            x: xPosition[positionIndex],
-            y: 300,
-            angle: (Math.random() * 120 - 60 + angleOffset[positionIndex]) / 180 * Math.PI, // -60 to 60 degree
+            x: xPosition[xPositionIndex],
+            y: yPosition[yPositionIndex],
+            angle: (Math.random() * 120 - 60 + angleOffset[xPositionIndex]) / 180 * Math.PI, // -60 to 60 degree
             speed: 0.5,
             timestamp: Date.now()
         }
@@ -92,10 +92,11 @@ function processHit(ws, data) {
     if (players[position] && players[position].balance >= bet) {
         players[position].balance -= bet; // Deduct the bet from the player's balance
         // 随机计算是否捕获鱼
-        const isCaught = Math.random() < 1 / 3;
+        const fishIndex =  fishTypes.indexOf(fish.type) + 1;
+        const isCaught = Math.random() < 1 / (fishIndex * 2);
         let winAmount = 0;
         if (isCaught) {
-            winAmount = bet * 3;
+            winAmount = bet * (fishIndex + 2);
             players[position].balance += winAmount; // Update the balance with the win amount
         }
 

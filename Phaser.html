@@ -11,9 +11,7 @@
         preload() {
             // 预加载资源，路径需要替换为您实际的资源路径
             this.load.image('undersea', 'public/assets/img/bg.jpg');
-            this.load.image('coral', 'public/assets/img/seabed.png');
-            this.load.image('Fish_001', 'public/assets/img/fish_001.png');
-            this.load.image('Fish_002', 'public/assets/img/fish_002.png');
+            this.load.image('coral', 'public/assets/img/seabed.png');\
             this.load.image('cannon_head', 'public/assets/img/cannon_head.png');
             this.load.image('cannon_body', 'public/assets/img/cannon_body.png');
             // 加载子弹图像
@@ -62,34 +60,18 @@
                 angle = Phaser.Math.Angle.BetweenPoints(this.cannon, pointer);
                 this.cannon.rotation = angle;
             });
-            this.anims.create({
-                key: 'stingray',
-                frames: this.anims.generateFrameNames('sea', {prefix: 'stingray', end: 23, zeroPad: 4}),
-                repeat: -1
-            });
-            const ray = this.add.sprite(100, 300, 'seacreatures').play('stingray');
-            // 初始翻轉stingray
-            ray.scaleX = -1; // 將stingray翻轉
-            this.previousX = ray.x; // 保存ray的x位置
-            // 移動ray並在移動方向改變時翻轉
-            this.tweens.add({
-                targets: ray,
-                x: 800,
-                y: 300,
-                duration: 10000,
-                ease: 'Power1',
-                repeat: -1,
-                yoyo: true
-            });
-            this.ray = ray;
 
+            this.anims.create({ key: 'Fish_001', frames: this.anims.generateFrameNames('sea', { prefix: 'blueJellyfish', end: 32, zeroPad: 4 }), repeat: -1 });
+            this.anims.create({ key: 'Fish_002', frames: this.anims.generateFrameNames('sea', { prefix: 'crab1', end: 25, zeroPad: 4 }), repeat: -1 });
+            this.anims.create({ key: 'Fish_003', frames: this.anims.generateFrameNames('sea', { prefix: 'octopus', end: 24, zeroPad: 4 }), repeat: -1 });
+            this.anims.create({ key: 'Fish_004', frames: this.anims.generateFrameNames('sea', { prefix: 'purpleFish', end: 20, zeroPad: 4 }), repeat: -1 });
+            this.anims.create({ key: 'Fish_005', frames: this.anims.generateFrameNames('sea', { prefix: 'stingray', end: 23, zeroPad: 4 }), repeat: -1 });
 
             // 点击发射子弹
             this.input.on('pointerdown', this.shootBullet, this);
             // 示例添加鱼
-            this.addFish('Fish_001', 800, 300, 100, 'firstFish');
-            //this.addFish('Fish_002', 0, 400, 100, 'secondFish');
-
+            //this.addAnimatedFish({type: 'Fish_001', x: 400, y: 100, speed: 0.2, id: 'f01_gR5NHC', angle:  Math.PI});
+            //this.addAnimatedFish({type: 'Fish_002', x: 400, y: 500, speed: 0.
             // 这里可以通过socket或者其他方式接收服务器的鱼数据，然后生成鱼
             this.websocketHandler();
         }
@@ -117,6 +99,21 @@
                         if (foundFish) {
                             // 播放音效
                             _this.sound.playAudioSprite('sfx', 'death');
+
+                            // 显示获胜金额
+                            let winText = _this.add.text(foundFish.x, foundFish.y, `+${data.result.transaction.win}`, { fontSize: '20px', fill: '#dabb0d' });
+                            winText.setOrigin(0.5, 0.5); // 使文本居中显示
+                            // 使文本在一段时间后消失
+                            _this.tweens.add({
+                                targets: winText,
+                                alpha: { from: 1, to: 0 },
+                                ease: 'Linear', // 线性变化
+                                duration: 1000, // 持续时间为1000毫秒
+                                onComplete: () => {
+                                    winText.destroy(); // 文本消失后销毁文本对象
+                                }
+                            });
+
                             // 创建一个Tween来实现闪烁效果
                             // 如果击中，从数组中移除鱼
                             _this.tweens.add({
@@ -134,6 +131,13 @@
                             // 如果沒有找到匹配的魚
                             console.log('mismatch');
                         }
+                    } else {
+                        console.log('miss');
+                        // update balance of player
+                        let position = data.result.position;
+                        let balance = data.result.balance;
+                        _this.cannonBalanceText[position].setText(`Balance: ${balance}`);
+
                     }
 
                     return;
@@ -148,13 +152,14 @@
                     case 'fireBullet': { // 接收新的炮弹数据并添加到bullets数组中
                         // here, only show other's bullet
                         if (data.position !== _this.playerPosition) {
-                            _this.showBullet(data.bullet.x, data.bullet.y, data.bullet.angle, config.bulletSpeed);
+                            _this.showBullet(data);
                         }
                     }
                         break;
                     case 'fish': // 添加鱼到数组
                         //fishes.push(data.fish);
-                        _this.addFish2(data.fish);
+                        //_this.addFish2(data.fish);
+                        _this.addAnimatedFish(data.fish);
                         break;
 
                     case 'error':
@@ -167,67 +172,40 @@
 
         update() {
             for (const fish of this.fishes.getChildren()) {
-                // 檢查ray的x位置是否變化，以確定是否需要翻轉
+                // 檢查x位置是否變化，以確定是否需要翻轉
                 let previousX = fish.getData('previousX');
-                let diff = fish.body.x - previousX;
-                if (Math.abs(diff) > 1) {
-                    if (diff > 0) {
+                let PreviousY = fish.getData('previousY');
+                let diffX = fish.body.x - previousX;
+                let diffY = fish.body.y - PreviousY;
+                if (Math.abs(diffX) > 1) {
+                    if (diffX > 0) {
                         fish.scaleX = -1; // 向右移動
-                    } else if (diff < 0) {
+                    } else if (diffX < 0) {
                         fish.scaleX = 1; // 向左移動
                     }
+                    fish.setData('previousX', fish.body.x); // 更新前一位置，以便下次比較
                 }
-                fish.setData('previousX', fish.body.x); // 更新前一位置，以便下次比較
+                if (Math.abs(diffY) > 1) {
+                    // 透過diffX,與diffY的比較，來決定魚的角度
+                    //fish.angle = Math.atan2(Math.abs(1), Math.abs(1)) * 180 / Math.PI;
+                    fish.setData('previousY', fish.body.y);
+                }
             }
-
-            // 檢查ray的x位置是否變化，以確定是否需要翻轉
-            if (this.ray.x > this.previousX) {
-                this.ray.scaleX = -1; // 向右移動
-            } else if (this.ray.x < this.previousX) {
-                this.ray.scaleX = 1; // 向左移動
-            }
-            this.previousX = this.ray.x; // 更新前一位置，以便下次比較
         }
 
-
-        // {
-        //     "action": "fish",
-        //     "fish": {
-        //         "type": "Fish_001",
-        //         "id": "f01_gR5NHC",
-        //         "x": 800,
-        //         "y": 300,
-        //         "angle": 4.8509796610083855,
-        //         "speed": 0.5,
-        //         "timestamp": 1708174385607
-        //     }
-        // }
-        addFish(fishType, x, y, speed, id) {
-            // 添加鱼到游戏中
-            let fish = this.fishes.create(x, y, fishType);
-            // 根据服务器提供的速度和角度信息来设置鱼的移动
-            fish.setData('speed', speed);
-            fish.setData('id', id);
-            fish.setData('previousX', x);
-            // 假设这里的角度是以弧度为单位
-            fish.body.mass = config.fishMass;
-            fish.body.velocity.x = Math.cos(Phaser.Math.DegToRad(0)) * speed;
-            fish.body.velocity.y = Math.sin(Phaser.Math.DegToRad(0)) * speed;
-            fish.setCollideWorldBounds(true);
-            fish.setBounce(1);
-        }
-
-        addFish2(data) {
-            // 添加鱼到游戏中
-            let fish = this.fishes.create(data.x, data.y, data.type);
+        addAnimatedFish(data) {
+            // 创建带有动画的鱼
+            let fish = this.physics.add.sprite(data.x, data.y, 'seacreatures').play(data.type);
+            this.fishes.add(fish);
+            fish.setData('type', data.type);
             fish.setData('speed', data.speed);
             fish.setData('id', data.id);
+            fish.setData('previousX', data.x);
+            fish.setData('previousY', data.y);
             fish.body.mass = config.fishMass;
-            // 根据服务器提供的速度和角度信息来设置鱼的移动
-            fish.x = data.x;
-            fish.y = data.y;
-            // 移動魚
-            this.physics.velocityFromRotation(data.angle, config.fishSpeed, fish.body.velocity);
+            // 将精灵的图像旋转90度（顺时针），使其朝向与移动方向成90度角
+            //fish.setAngle(Phaser.Math.RadToDeg(data.angle) + 90);
+            this.physics.velocityFromRotation(data.angle, data.speed*300, fish.body.velocity);
             fish.setCollideWorldBounds(true);
             fish.setBounce(1);
         }
@@ -254,7 +232,9 @@
             this.ws.send(JSON.stringify({action: 'fireBullet', bullet: data, position: this.playerPosition,}));
         }
 
-        showBullet(x, y, rotation, speed) {
+        showBullet(data) {
+            let rotation = data.bullet.angle;
+            let speed = config.bulletSpeed;
             this.cannonOpposite = this.playerPosition === 0 ? this.cannon2Head : this.cannon1Head;
             // 发射子弹
             let bullet = this.bullets.create(this.cannonOpposite.x, this.cannonOpposite.y, 'bullet');
@@ -263,20 +243,27 @@
             bullet.body.mass = config.bulletMass;
             this.physics.velocityFromRotation(rotation, speed, bullet.body.velocity);
             // 子弹的碰撞检测
-            this.physics.add.collider(bullet, this.fishes, this.hitFish, null, this);
+            this.physics.add.collider(bullet, this.fishes, this.showHitFish, null, this);
             this.cannonOpposite.rotation = rotation;
             // 播放音效
             this.sound.playAudioSprite('sfx', 'shot');
         }
 
+        showHitFish(bullet, fish) {
+            bullet.destroy();
+            // 播放音效
+            this.sound.playAudioSprite('sfx', 'boss hit');
+        }
         hitFish(bullet, fish) {
             bullet.destroy();
+            // 播放音效
+            this.sound.playAudioSprite('sfx', 'boss hit');
             // 这里可以发送击中信息给服务器
             //{"action":"hit","fish":{"type":"Fish_001","id":"f01_vDQvbz"},"bullet":{"id":"x8gCEtet0qJO"}}
             let data = {
                 action: 'hit',
                 fish: {
-                    type: fish.texture.key,
+                    type: fish.getData('type'),
                     id: fish.getData('id')
                 },
                 bullet: {
