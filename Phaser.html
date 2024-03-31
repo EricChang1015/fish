@@ -113,20 +113,7 @@
                                     winText.destroy(); // 文本消失后销毁文本对象
                                 }
                             });
-
-                            // 创建一个Tween来实现闪烁效果
-                            // 如果击中，从数组中移除鱼
-                            _this.tweens.add({
-                                targets: foundFish, // 目标是被击中的鱼
-                                alpha: 0, // 目标透明度为0，使对象不可见
-                                ease: 'Linear', // 线性变化，即匀速
-                                duration: 100, // 持续时间100毫秒
-                                repeat: 5, // 重复5次，总共闪烁5次
-                                yoyo: true, // 完成一个动画周期后，再反向运行回到初始状态，实现闪烁
-                                onComplete: () => {
-                                    foundFish.destroy(); // 所有闪烁完成后，销毁鱼对象
-                                }
-                            });
+                            _this.showCaptureAnimation(foundFish);
                         } else {
                             // 如果沒有找到匹配的魚
                             console.log('mismatch');
@@ -193,6 +180,20 @@
             }
         }
 
+        showCaptureAnimation(fish) {
+            this.tweens.add({
+                targets: fish, // 目标是被击中的鱼
+                scale: { from: 1, to: 1.5 },
+                alpha: { from: 1, to: 0 },
+                ease: 'Linear',
+                duration: 100, // 持续时间100毫秒
+                repeat: 3, // 重复5次，总共闪烁5次
+                yoyo: true, // 完成一个动画周期后，再反向运行回到初始状态，实现闪烁
+                onComplete: () => {
+                    fish.destroy(); // 所有闪烁完成后，销毁鱼对象
+                }
+            });
+        }
         addAnimatedFish(data) {
             // 创建带有动画的鱼
             let fish = this.physics.add.sprite(data.x, data.y, 'seacreatures').play(data.type);
@@ -203,8 +204,7 @@
             fish.setData('previousX', data.x);
             fish.setData('previousY', data.y);
             fish.body.mass = config.fishMass;
-            // 将精灵的图像旋转90度（顺时针），使其朝向与移动方向成90度角
-            //fish.setAngle(Phaser.Math.RadToDeg(data.angle) + 90);
+            fish.body.setSize(1, 1);// to make the physical collision area at the center of fish
             this.physics.velocityFromRotation(data.angle, data.speed*300, fish.body.velocity);
             fish.setCollideWorldBounds(true);
             fish.setBounce(1);
