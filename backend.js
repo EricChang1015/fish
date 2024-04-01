@@ -1,5 +1,35 @@
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({port: 8080});
+const { createClient } = require('redis');
+const { MongoClient } = require('mongodb');
+const redisClient = createClient({ url: 'redis://redis:6379' }); // Replace with your Redis URL
+let db; // Define `db` in an accessible scope
+// Asynchronous function to connect to MongoDB
+async function createMongoDBConnection() {
+    const user = process.env.MONGO_INITDB_ROOT_USERNAME;
+    const password = process.env.MONGO_INITDB_ROOT_PASSWORD;
+    const dbname = process.env.MONGO_INITDB_DATABASE;
+    const uri = `mongodb://${user}:${password}@mongo:27017/${dbname}?authSource=admin`; // Replace with your MongoDB URI
+    console.log(uri)
+    const client = new MongoClient(uri);
+    await client.connect();
+    return client.db('fishGameDB'); // Replace with your database name
+}
+
+// Immediately Invoked Function Expression (IIFE) to handle top-level await
+(async () => {
+    try {
+        await redisClient.connect();
+        console.log('Connected to Redis');
+        db = await createMongoDBConnection();
+        console.log('Connected to MongoDB');
+        // ...rest of your WebSocket server logic...q
+    } catch (err) {
+        console.error('Error during server initialization', err);
+        process.exit(1); // Exit in case of initialization failure
+    }
+})();
+
 
 let positions = [null, null]; // 兩個位置，初始時都是空的
 let players = [{}, {}]; // 用來保存玩家的balance數據
@@ -61,7 +91,7 @@ setInterval(() => {
 
 function getFish() {
     const xPosition = [0, 800];
-    const yPosition = [100,200, 300, 400, 500];
+    const yPosition = [100, 200, 300, 400, 500];
     const angleOffset = [0, 180];
     const xPositionIndex = Math.floor(Math.random() * xPosition.length)
     const yPositionIndex = Math.floor(Math.random() * yPosition.length)
@@ -84,7 +114,7 @@ function getFish() {
     };
 }
 
-function processHit(ws, data) {
+async function processHit(ws, data) {
     const fish = data.fish
     const bullet = data.bullet
     const position = data.position;
@@ -98,6 +128,16 @@ function processHit(ws, data) {
         if (isCaught) {
             winAmount = bet * (fishIndex + 2);
             players[position].balance += winAmount; // Update the balance with the win amount
+
+            // Cache the hit event in Redis instead of writing directly to the DB
+            const hitEvent = {
+                playerId: position, // or any player identifier
+                hit: isCaught,
+                winAmount: winAmount,
+                timestamp: Date.now()
+            };
+
+            await redisClient.rPush('hitEvents', JSON.stringify(hitEvent));
         }
 
         let resultMessage = {
@@ -128,3 +168,19 @@ function generateRandomString(length) {
     }
     return result;
 }
+
+async function flushHitsToMongoDB(db) {
+    const hitEvents = await redisClient.lRange('hitEvents', 0, -1);
+    const hitDocs = hitEvents.map(JSON.parse);
+
+    if (hitDocs.length > 0) {
+        const collection = db.collection('hitEvents'); // Use your collection name
+        await collection.insertMany(hitDocs);
+        await redisClient.del('hitEvents'); // Clear the list after flushing
+    }
+}
+
+// Set an interval for flushing data to MongoDB
+setInterval(() => {
+    flushHitsToMongoDB(db).catch(console.error);
+}, 10000); // Flush every 10 seconds, adjust as necessary
