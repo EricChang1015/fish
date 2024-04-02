@@ -177,6 +177,17 @@
                     //fish.angle = Math.atan2(Math.abs(1), Math.abs(1)) * 180 / Math.PI;
                     fish.setData('previousY', fish.body.y);
                 }
+                this.checkFishValid(fish);
+            }
+        }
+
+        checkFishValid(fish) {
+            const timestamp = fish.getData('timestamp');
+            const durationMS = fish.getData('durationMS');
+            const isActive = (Date.now() < (timestamp + durationMS));
+
+            if (!isActive && fish.active) {
+                fish.destroy();
             }
         }
 
@@ -203,6 +214,8 @@
             fish.setData('id', data.id);
             fish.setData('previousX', data.x);
             fish.setData('previousY', data.y);
+            fish.setData('timestamp', data.timestamp);
+            fish.setData('durationMS', data.durationMS);
             fish.body.mass = config.fishMass;
             fish.body.setSize(1, 1);// to make the physical collision area at the center of fish
             this.physics.velocityFromRotation(data.angle, data.speed*300, fish.body.velocity);
