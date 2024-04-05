@@ -144,9 +144,7 @@
                     }
                         break;
                     case 'fish': // 添加鱼到数组
-                        //fishes.push(data.fish);
-                        //_this.addFish2(data.fish);
-                        _this.addAnimatedFish(data.fish);
+                        _this.addFish(data.fish);
                         break;
 
                     case 'error':
@@ -192,6 +190,7 @@
         }
 
         showCaptureAnimation(fish) {
+            this.fishes.remove(fish);
             this.tweens.add({
                 targets: fish, // 目标是被击中的鱼
                 scale: { from: 1, to: 1.5 },
@@ -205,7 +204,7 @@
                 }
             });
         }
-        addAnimatedFish(data) {
+        addFish(data) {
             // 创建带有动画的鱼
             let fish = this.physics.add.sprite(data.x, data.y, 'seacreatures').play(data.type);
             this.fishes.add(fish);
@@ -224,11 +223,13 @@
         }
 
         shootBullet(pointer) {
+            const bulletId = generateBulletID();
             let bullet = this.bullets.create(this.cannon.x, this.cannon.y, 'bullet');
             bullet.setDisplaySize(100, 100);
             // set the rotation of the bullet to pointer
             bullet.rotation = this.physics.moveToObject(bullet, pointer, config.bulletSpeed);
             bullet.body.mass = config.bulletMass;
+            bullet.setData('id', bulletId);
             // 子弹的碰撞检测
             this.physics.add.collider(bullet, this.fishes, this.hitFish, null, this);
             // 播放音效
@@ -240,7 +241,7 @@
                 angle: bullet.rotation,
                 speed: config.bulletSpeed,
                 timestamp: Date.now(),
-                id: generateBulletID()
+                id: bulletId
             };
             this.ws.send(JSON.stringify({action: 'fireBullet', bullet: data, position: this.playerPosition,}));
         }
@@ -268,6 +269,7 @@
             this.sound.playAudioSprite('sfx', 'boss hit');
         }
         hitFish(bullet, fish) {
+            const bulletId = bullet.getData('id');
             bullet.destroy();
             // 播放音效
             this.sound.playAudioSprite('sfx', 'boss hit');
@@ -280,7 +282,7 @@
                     id: fish.getData('id')
                 },
                 bullet: {
-                    id: generateBulletID(),
+                    id: bulletId,
                     bet: 5 //FIXME
                 },
                 position: this.playerPosition
