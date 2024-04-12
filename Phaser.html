@@ -68,10 +68,16 @@
             this.anims.create({ key: 'Fish_005', frames: this.anims.generateFrameNames('sea', { prefix: 'stingray', end: 23, zeroPad: 4 }), repeat: -1 });
 
             // 点击发射子弹
-            this.input.on('pointerdown', this.shootBullet, this);
+            this.input.on('pointerdown', (pointer, gameObjects) => {
+                if (gameObjects.length > 0) {
+                    let fish = gameObjects[0]; // Get the first clicked object which should be a fish
+                    this.shootBullet(pointer, fish);
+                } else {
+                    this.shootBullet(pointer);
+                }
+            });
             // 示例添加鱼
             //this.addAnimatedFish({type: 'Fish_001', x: 400, y: 100, speed: 0.2, id: 'f01_gR5NHC', angle:  Math.PI});
-            //this.addAnimatedFish({type: 'Fish_002', x: 400, y: 500, speed: 0.
             // 这里可以通过socket或者其他方式接收服务器的鱼数据，然后生成鱼
             this.websocketHandler();
         }
@@ -106,7 +112,7 @@
                             // 使文本在一段时间后消失
                             _this.tweens.add({
                                 targets: winText,
-                                alpha: { from: 1, to: 0 },
+                                alpha: {from: 1, to: 0},
                                 ease: 'Linear', // 线性变化
                                 duration: 1000, // 持续时间为1000毫秒
                                 onComplete: () => {
@@ -139,7 +145,7 @@
                     case 'fireBullet': { // 接收新的炮弹数据并添加到bullets数组中
                         // here, only show other's bullet
                         if (data.position !== _this.playerPosition) {
-                            _this.showBullet(data);
+                            _this.showBullet(data, data.bullet.targetFishId);
                         }
                     }
                         break;
@@ -156,6 +162,19 @@
         }
 
         update() {
+            // 如果鎖定, 子彈導航到魚隻
+            this.bullets.getChildren().forEach(bullet => {
+                if (bullet.targetFish) {
+                    let targetFish = this.fishes.getChildren().find(fish => fish.getData('id') === bullet.targetFish.getData('id'));
+                    // 检查目标鱼是否已经不存在
+                    if (targetFish == null) {
+                        bullet.targetFish = null;  // 目标丢失，子弹恢复默认行为
+                    } else {
+                        this.physics.moveToObject(bullet, bullet.targetFish, config.bulletSpeed);
+                    }
+                }
+            });
+
             for (const fish of this.fishes.getChildren()) {
                 // 檢查x位置是否變化，以確定是否需要翻轉
                 let previousX = fish.getData('previousX');
@@ -193,8 +212,8 @@
             this.fishes.remove(fish);
             this.tweens.add({
                 targets: fish, // 目标是被击中的鱼
-                scale: { from: 1, to: 1.5 },
-                alpha: { from: 1, to: 0 },
+                scale: {from: 1, to: 1.5},
+                alpha: {from: 1, to: 0},
                 ease: 'Linear',
                 duration: 100, // 持续时间100毫秒
                 repeat: 3, // 重复5次，总共闪烁5次
@@ -204,9 +223,18 @@
                 }
             });
         }
+
         addFish(data) {
             // 创建带有动画的鱼
             let fish = this.physics.add.sprite(data.x, data.y, 'seacreatures').play(data.type);
+			// 鎖定魚隻畫面
+            fish.setInteractive();
+            fish.on('pointerover', () => {
+                fish.setTint(0xff0000);  // Change color to a lighter shade
+            });
+            fish.on('pointerout', () => {
+                fish.clearTint();  // Remove tint effect
+            });
             this.fishes.add(fish);
             fish.setData('type', data.type);
             fish.setData('speed', data.speed);
@@ -217,12 +245,12 @@
             fish.setData('durationMS', data.durationMS);
             fish.body.mass = config.fishMass;
             fish.body.setSize(1, 1);// to make the physical collision area at the center of fish
-            this.physics.velocityFromRotation(data.angle, data.speed*300, fish.body.velocity);
+            this.physics.velocityFromRotation(data.angle, data.speed * 300, fish.body.velocity);
             fish.setCollideWorldBounds(true);
             fish.setBounce(1);
         }
 
-        shootBullet(pointer) {
+        shootBullet(pointer, targetFish = null) {
             const bulletId = generateBulletID();
             let bullet = this.bullets.create(this.cannon.x, this.cannon.y, 'bullet');
             bullet.setDisplaySize(100, 100);
@@ -243,10 +271,14 @@
                 timestamp: Date.now(),
                 id: bulletId
             };
+            if (targetFish) {
+                bullet.targetFish = targetFish;  // 将目标鱼设置为子弹的属性
+                data.targetFishId = targetFish.getData('id');
+            }
             this.ws.send(JSON.stringify({action: 'fireBullet', bullet: data, position: this.playerPosition,}));
         }
 
-        showBullet(data) {
+        showBullet(data, targetFishId = null) {
             let rotation = data.bullet.angle;
             let speed = config.bulletSpeed;
             this.cannonOpposite = this.playerPosition === 0 ? this.cannon2Head : this.cannon1Head;
@@ -256,6 +288,15 @@
             bullet.rotation = rotation;
             bullet.body.mass = config.bulletMass;
             this.physics.velocityFromRotation(rotation, speed, bullet.body.velocity);
+
+            if (targetFishId !== null) {
+                let targetFish = this.fishes.getChildren().find(fish => fish.getData('id') === targetFishId);
+                if (targetFish) {
+                    bullet.targetFish = targetFish;  // 将目标鱼设置为子弹的属性
+                    this.physics.moveToObject(bullet, targetFish, config.bulletSpeed);
+                }
+            }
+
             // 子弹的碰撞检测
             this.physics.add.collider(bullet, this.fishes, this.showHitFish, null, this);
             this.cannonOpposite.rotation = rotation;
@@ -268,6 +309,7 @@
             // 播放音效
             this.sound.playAudioSprite('sfx', 'boss hit');
         }
+
         hitFish(bullet, fish) {
             const bulletId = bullet.getData('id');
             bullet.destroy();
