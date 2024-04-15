@@ -21,12 +21,11 @@
             };
         }
         preload() {
-            // 预加载资源，路径需要替换为您实际的资源路径
             this.load.image('undersea', 'public/assets/img/bg.jpg');
             this.load.image('coral', 'public/assets/img/seabed.png');
             this.load.image('cannon_head', 'public/assets/img/cannon_head.png');
             this.load.image('cannon_body', 'public/assets/img/cannon_body.png');
-            // 加载子弹图像
+            this.load.image('cursor', 'public/assets/img/cursor.png');
             this.load.image('bullet', 'public/assets/img/bullet.png');
             this.load.audioSprite('sfx', 'public/assets/audio/fx_mixdown.json', [
                 'public/assets/audio/fx_mixdown.ogg'
@@ -41,7 +40,14 @@
             // size of the game
             this.add.image(400, 300, 'undersea');
             this.add.image(0, 466, 'coral').setOrigin(0);
-
+            // for aimed object.
+            this.customCursor = this.add.sprite(0, 0, 'cursor');
+            this.customCursor.scale = 1.5;
+            this.customCursor.setDepth(1000);
+            this.customCursor.setVisible(false);
+            // replace orignal cursor
+            this.input.setDefaultCursor(`url('public/assets/img/cursor.png'), pointer`);
+            
             // 初始化炮台，鱼，和子弹的组
             this.cannon1Head = this.add.image(100, config.height - 48, 'cannon_head').setDepth(1);
             this.add.image(100, config.height, 'cannon_body').setDepth(1);
@@ -79,7 +85,6 @@
             this.anims.create({ key: 'Fish_004', frames: this.anims.generateFrameNames('sea', { prefix: 'purpleFish', end: 20, zeroPad: 4 }), repeat: -1 });
             this.anims.create({ key: 'Fish_005', frames: this.anims.generateFrameNames('sea', { prefix: 'stingray', end: 23, zeroPad: 4 }), repeat: -1 });
 
-
             const graphics = this.add.graphics();
             graphics.lineStyle(1, 0xffffff, 1);
 
@@ -89,11 +94,37 @@
             this.paths.p04.draw(graphics, 128);
 
 
+            // 添加自動射擊功能
+            this.autoShootEnabled = false;
+            this.autoShootButton = this.add.text(config.width / 2 - 100, 10, 'Auto Shoot: OFF', {
+                font: 'bold 16px Arial',
+                fill: '#f10f4b'
+            })
+                .setInteractive()
+                .on('pointerdown', () => {
+                    this.autoShootEnabled = !this.autoShootEnabled;
+                    this.autoShootButton.setText(`Auto Shoot: ${this.autoShootEnabled ? 'ON' : 'OFF'}`);
+                    if (this.autoShootEnabled) {
+                        this.startAutoShooting();
+                    }
+                });
+
+
             // 点击发射子弹
-            this.input.on('pointerdown', this.shootBullet, this);
+            this.input.on('pointerdown', (pointer, gameObjects) => {
+                if (gameObjects.length > 0 && gameObjects[0].getData('isFish') === true) {
+                    let fish = gameObjects[0]; // Get the first clicked object which should be a fish
+                    if (this.autoShootEnabled) {
+                        console.log('auto shoot enabled fish.id:' + fish.getData('id'));
+                        fish.setData('autoShoot', true);
+                    }
+                    this.shootBullet(pointer, fish);
+                } else {
+                    this.shootBullet(pointer);
+                }
+            });
             // 示例添加鱼
             //this.addAnimatedFish({type: 'Fish_001', x: 400, y: 100, speed: 0.2, id: 'f01_gR5NHC', angle:  Math.PI});
-            //this.addAnimatedFish({type: 'Fish_002', x: 400, y: 500, speed: 0.
             // 这里可以通过socket或者其他方式接收服务器的鱼数据，然后生成鱼
             this.websocketHandler();
         }
@@ -161,7 +192,7 @@
                     case 'fireBullet': { // 接收新的炮弹数据并添加到bullets数组中
                         // here, only show other's bullet
                         if (data.position !== _this.playerPosition) {
-                            _this.showBullet(data);
+                            _this.showBullet(data, data.bullet.targetFishId);
                         }
                     }
                         break;
@@ -178,6 +209,33 @@
         }
 
         update() {
+            // Existing update logic...
+            if (this.autoShootEnabled && this.fishes.getChildren().length > 0) {
+                // 鎖定魚隻, 只取一隻
+                let target = this.fishes.getChildren().find(fish => fish.getData('autoShoot'));
+                if (target) {
+                    this.customCursor.setPosition(target.x, target.y);
+                    this.customCursor.setDepth(1000);
+                    this.customCursor.setVisible(true);
+                    this.cannon.rotation = Phaser.Math.Angle.Between(this.cannon.x, this.cannon.y, target.x, target.y);
+                } else {
+                    this.customCursor.setVisible(false);
+                }
+            }
+
+            // 如果鎖定, 子彈導航到魚隻
+            this.bullets.getChildren().forEach(bullet => {
+                if (bullet.targetFish) {
+                    let targetFish = this.fishes.getChildren().find(fish => fish.getData('id') === bullet.targetFish.getData('id'));
+                    // 检查目标鱼是否已经不存在
+                    if (targetFish == null) {
+                        bullet.targetFish = null;  // 目标丢失，子弹恢复默认行为
+                    } else {
+                        this.physics.moveToObject(bullet, bullet.targetFish, config.bulletSpeed);
+                    }
+                }
+            });
+
             for (const fish of this.fishes.getChildren()) {
                 // // 檢查x位置是否變化，以確定是否需要翻轉
                 // let previousX = fish.getData('previousX');
@@ -207,6 +265,9 @@
             const isActive = (Date.now() < (timestamp + durationMS));
 
             if (!isActive && fish.active) {
+                if (fish.getData('autoShoot')) {
+                    this.customCursor.setVisible(false);
+                }
                 fish.destroy();
             }
         }
@@ -216,17 +277,21 @@
             this.fishes.remove(fish);
             this.tweens.add({
                 targets: fish, // 目标是被击中的鱼
-                scale: { from: 1, to: 1.5 },
-                alpha: { from: 1, to: 0 },
+                scale: {from: 1, to: 1.5},
+                alpha: {from: 1, to: 0},
                 ease: 'Linear',
                 duration: 100, // 持续时间100毫秒
                 repeat: 3, // 重复5次，总共闪烁5次
                 yoyo: true, // 完成一个动画周期后，再反向运行回到初始状态，实现闪烁
                 onComplete: () => {
+                    if (fish.getData('autoShoot')) {
+                        this.customCursor.setVisible(false);
+                    }
                     fish.destroy(); // 所有闪烁完成后，销毁鱼对象
                 }
             });
         }
+
         addFish(data) {
             // 根据 data 中的 pathId 选择路径
             let path = this.paths[data.pathId];
@@ -239,7 +304,6 @@
             let fish = this.add.follower(path, 0, 0, 'seacreatures');
             fish.scaleX = -1; // 向右移動
             if (data.pathId == 'p02') fish.scaleX = 1; // 向左移動
-                this.fishes.add(fish);
 
             fish.startFollow({
                 positionOnPath: true,
@@ -250,6 +314,16 @@
                 verticalAdjust: true // 如果需要，可以调整鱼的垂直对齐
             }).play(data.type);
 
+
+            fish.setInteractive();
+            fish.on('pointerover', () => {
+                fish.setTint(0xff0000);  // Change color to a lighter shade
+            });
+            fish.on('pointerout', () => {
+                fish.clearTint();  // Remove tint effect
+            });
+            this.fishes.add(fish);
+            fish.setData('isFish', true);
             fish.setData('type', data.type);
             fish.setData('speed', data.speed);
             fish.setData('id', data.id);
@@ -267,7 +341,27 @@
             //fish.setBounce(1);
         }
 
-        shootBullet(pointer) {
+        startAutoShooting() {
+            console.log('start auto shooting');
+            this.autoShootTimer = this.time.addEvent({
+                delay: 500, // 100 ms between shots
+                callback: () => {
+                    if (!this.autoShootEnabled) {
+                        console.log('stop auto shooting')
+                        this.autoShootTimer.remove(false);
+                        return;
+                    }
+                    let target = this.fishes.getChildren().find(fish => fish.getData('autoShoot'));
+                    if (target !== undefined) {
+                        console.log('auto shoot target:', target.getData('id'));
+                        this.shootBullet(target, target);
+                    }
+                },
+                loop: true
+            });
+        }
+
+        shootBullet(pointer, targetFish = null) {
             const bulletId = generateBulletID();
             let bullet = this.bullets.create(this.cannon.x, this.cannon.y, 'bullet');
             bullet.setDisplaySize(100, 100);
@@ -288,10 +382,14 @@
                 timestamp: Date.now(),
                 id: bulletId
             };
+            if (targetFish !== null && targetFish !== undefined) {
+                bullet.targetFish = targetFish;  // 将目标鱼设置为子弹的属性
+                data.targetFishId = targetFish.getData('id');
+            }
             this.ws.send(JSON.stringify({action: 'fireBullet', bullet: data, position: this.playerPosition,}));
         }
 
-        showBullet(data) {
+        showBullet(data, targetFishId = null) {
             let rotation = data.bullet.angle;
             let speed = config.bulletSpeed;
             this.cannonOpposite = this.playerPosition === 0 ? this.cannon2Head : this.cannon1Head;
@@ -301,6 +399,15 @@
             bullet.rotation = rotation;
             bullet.body.mass = config.bulletMass;
             this.physics.velocityFromRotation(rotation, speed, bullet.body.velocity);
+
+            if (targetFishId !== null) {
+                let targetFish = this.fishes.getChildren().find(fish => fish.getData('id') === targetFishId);
+                if (targetFish) {
+                    bullet.targetFish = targetFish;  // 将目标鱼设置为子弹的属性
+                    this.physics.moveToObject(bullet, targetFish, config.bulletSpeed);
+                }
+            }
+
             // 子弹的碰撞检测
             this.physics.add.collider(bullet, this.fishes, this.showHitFish, null, this);
             this.cannonOpposite.rotation = rotation;
@@ -313,6 +420,7 @@
             // 播放音效
             this.sound.playAudioSprite('sfx', 'boss hit');
         }
+
         hitFish(bullet, fish) {
             fish.body.stop(); // 避免子彈打到後, 對路徑的影響
             const bulletId = bullet.getData('id');
