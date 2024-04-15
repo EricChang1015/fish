@@ -8,6 +8,18 @@
 <body>
 <script>
     class MainScene extends Phaser.Scene {
+        constructor() {
+            super();
+            // 预定义的路径
+            this.paths = {
+                p01: new Phaser.Curves.Path(0, 100).splineTo([164, 46, 274, 142, 412, 57, 522, 141, 664, 64, 800, 140]),
+                p02: new Phaser.Curves.Path(800, 500).splineTo([664, 464, 522, 541, 412, 457, 274, 542, 164, 446, 0, 542]),
+                p03: new Phaser.Curves.Ellipse(400, 300, 300, 150),
+                p04: new Phaser.Curves.Path(50, 300).lineTo(400, 100).lineTo(750, 300).lineTo(400, 500).lineTo(50, 300), // 示例路径
+
+                // 可以定义更多路径...
+            };
+        }
         preload() {
             // 预加载资源，路径需要替换为您实际的资源路径
             this.load.image('undersea', 'public/assets/img/bg.jpg');
@@ -66,6 +78,16 @@
             this.anims.create({ key: 'Fish_003', frames: this.anims.generateFrameNames('sea', { prefix: 'octopus', end: 24, zeroPad: 4 }), repeat: -1 });
             this.anims.create({ key: 'Fish_004', frames: this.anims.generateFrameNames('sea', { prefix: 'purpleFish', end: 20, zeroPad: 4 }), repeat: -1 });
             this.anims.create({ key: 'Fish_005', frames: this.anims.generateFrameNames('sea', { prefix: 'stingray', end: 23, zeroPad: 4 }), repeat: -1 });
+
+
+            const graphics = this.add.graphics();
+            graphics.lineStyle(1, 0xffffff, 1);
+
+            this.paths.p01.draw(graphics, 128);
+            this.paths.p02.draw(graphics, 128);
+            this.paths.p03.draw(graphics, 128);
+            this.paths.p04.draw(graphics, 128);
+
 
             // 点击发射子弹
             this.input.on('pointerdown', this.shootBullet, this);
@@ -157,24 +179,24 @@
 
         update() {
             for (const fish of this.fishes.getChildren()) {
-                // 檢查x位置是否變化，以確定是否需要翻轉
-                let previousX = fish.getData('previousX');
-                let PreviousY = fish.getData('previousY');
-                let diffX = fish.body.x - previousX;
-                let diffY = fish.body.y - PreviousY;
-                if (Math.abs(diffX) > 1) {
-                    if (diffX > 0) {
-                        fish.scaleX = -1; // 向右移動
-                    } else if (diffX < 0) {
-                        fish.scaleX = 1; // 向左移動
-                    }
-                    fish.setData('previousX', fish.body.x); // 更新前一位置，以便下次比較
-                }
-                if (Math.abs(diffY) > 1) {
-                    // 透過diffX,與diffY的比較，來決定魚的角度
-                    //fish.angle = Math.atan2(Math.abs(1), Math.abs(1)) * 180 / Math.PI;
-                    fish.setData('previousY', fish.body.y);
-                }
+                // // 檢查x位置是否變化，以確定是否需要翻轉
+                // let previousX = fish.getData('previousX');
+                // let PreviousY = fish.getData('previousY');
+                // let diffX = fish.body.x - previousX;
+                // let diffY = fish.body.y - PreviousY;
+                // if (Math.abs(diffX) > 1) {
+                //     if (diffX > 0) {
+                //         fish.scaleX = -1; // 向右移動
+                //     } else if (diffX < 0) {
+                //         fish.scaleX = 1; // 向左移動
+                //     }
+                //     fish.setData('previousX', fish.body.x); // 更新前一位置，以便下次比較
+                // }
+                // if (Math.abs(diffY) > 1) {
+                //     // 透過diffX,與diffY的比較，來決定魚的角度
+                //     //fish.angle = Math.atan2(Math.abs(1), Math.abs(1)) * 180 / Math.PI;
+                //     fish.setData('previousY', fish.body.y);
+                // }
                 this.checkFishValid(fish);
             }
         }
@@ -190,6 +212,7 @@
         }
 
         showCaptureAnimation(fish) {
+            fish.stopFollow(); // 停止沿路径移动
             this.fishes.remove(fish);
             this.tweens.add({
                 targets: fish, // 目标是被击中的鱼
@@ -205,9 +228,28 @@
             });
         }
         addFish(data) {
+            // 根据 data 中的 pathId 选择路径
+            let path = this.paths[data.pathId];
+            if (!path) {
+                console.error(`Path ${data.pathId} not found.`);
+                return;
+            }
+
             // 创建带有动画的鱼
-            let fish = this.physics.add.sprite(data.x, data.y, 'seacreatures').play(data.type);
-            this.fishes.add(fish);
+            let fish = this.add.follower(path, 0, 0, 'seacreatures');
+            fish.scaleX = -1; // 向右移動
+            if (data.pathId == 'p02') fish.scaleX = 1; // 向左移動
+                this.fishes.add(fish);
+
+            fish.startFollow({
+                positionOnPath: true,
+                duration: 10000, // 鱼沿着路径移动所需的时间（毫秒）
+                yoyo: false, // 如果想要鱼移动到路径末端然后返回，设置为 true
+                repeat: -1, // -1 表示无限循环
+                rotateToPath: false, // 自动旋转鱼以匹配路径方向
+                verticalAdjust: true // 如果需要，可以调整鱼的垂直对齐
+            }).play(data.type);
+
             fish.setData('type', data.type);
             fish.setData('speed', data.speed);
             fish.setData('id', data.id);
@@ -215,11 +257,14 @@
             fish.setData('previousY', data.y);
             fish.setData('timestamp', data.timestamp);
             fish.setData('durationMS', data.durationMS);
+            fish.setData('pathId', data.pathId);
             fish.body.mass = config.fishMass;
             fish.body.setSize(1, 1);// to make the physical collision area at the center of fish
-            this.physics.velocityFromRotation(data.angle, data.speed*300, fish.body.velocity);
-            fish.setCollideWorldBounds(true);
-            fish.setBounce(1);
+            //this.physics.velocityFromRotation(data.angle, data.speed*300, fish.body.velocity);
+            //fish.setCollideWorldBounds(true);
+            //setCollideWorldBounds
+            fish.body.onWorldBounds = true;
+            //fish.setBounce(1);
         }
 
         shootBullet(pointer) {
@@ -269,6 +314,7 @@
             this.sound.playAudioSprite('sfx', 'boss hit');
         }
         hitFish(bullet, fish) {
+            fish.body.stop(); // 避免子彈打到後, 對路徑的影響
             const bulletId = bullet.getData('id');
             bullet.destroy();
             // 播放音效
@@ -319,7 +365,7 @@
             default: 'arcade',
             arcade: {
                 gravity: {y: 0},
-                debug: false
+                debug: true
             }
         },
         scene: MainScene

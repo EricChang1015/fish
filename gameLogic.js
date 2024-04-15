@@ -1,5 +1,6 @@
 const { pushData } = require('./database');
 const fishTypes = ["Fish_001", "Fish_002", "Fish_003", "Fish_004", "Fish_005"];
+const pathIds = ["p01", "p02", "p03", "p04"];
 let players = [{}, {}]; // 用來保存玩家的balance數據
 
 function setBalance(position, balance) {
@@ -24,6 +25,7 @@ function getFish() {
             id: "f01_" + generateRandomString(6),
             x: xPosition[xPositionIndex],
             y: yPosition[yPositionIndex],
+            pathId: pathIds[Math.floor(Math.random() * pathIds.length)],
             angle: (Math.random() * 120 - 60 + angleOffset[xPositionIndex]) / 180 * Math.PI, // -60 to 60 degree
             speed: 0.5,
             timestamp: Date.now(),
