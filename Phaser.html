@@ -10,12 +10,17 @@
     class MainScene extends Phaser.Scene {
         constructor() {
             super();
+            this.path01 = [0,100, 164, 46, 274, 142, 412, 57, 522, 141, 664, 64, 800, 140];
             // 预定义的路径
             this.paths = {
-                p01: new Phaser.Curves.Path(0, 100).splineTo([164, 46, 274, 142, 412, 57, 522, 141, 664, 64, 800, 140]),
-                p02: new Phaser.Curves.Path(800, 500).splineTo([664, 464, 522, 541, 412, 457, 274, 542, 164, 446, 0, 542]),
-                p03: new Phaser.Curves.Ellipse(400, 300, 300, 150),
-                p04: new Phaser.Curves.Path(50, 300).lineTo(400, 100).lineTo(750, 300).lineTo(400, 500).lineTo(50, 300), // 示例路径
+                //p01: new Phaser.Curves.Ellipse(700, 600, 900, 400),
+                p02: new Phaser.Curves.Ellipse(-100, 50, 800, 400),
+                p03: new Phaser.Curves.Ellipse(-100, 600, 900, 400),
+                p04: new Phaser.Curves.Ellipse(700, 50, 800, 400),
+                //splineTo from path01's second point to end
+                p01: new Phaser.Curves.Path(0, 100).splineTo(this.path01.splice(2)),
+                //p02: new Phaser.Curves.Path(800, 500).splineTo([664, 464, 522, 541, 412, 457, 274, 542, 164, 446, 0, 542]),
+                //p04: new Phaser.Curves.Path(50, 300).lineTo(400, 100).lineTo(750, 300).lineTo(400, 500).lineTo(50, 300), // 示例路径
 
                 // 可以定义更多路径...
             };
@@ -197,7 +202,7 @@
                     }
                         break;
                     case 'fish': // 添加鱼到数组
-                        _this.addFish(data.fish);
+                        _this.addFleet(data.fish);
                         break;
 
                     case 'error':
@@ -292,21 +297,41 @@
             });
         }
 
-        addFish(data) {
-            // 根据 data 中的 pathId 选择路径
-            let path = this.paths[data.pathId];
+        // 當需要添加一組魚時
+        addFleet(data) {
+            // random number from 3 to 10
+            const fleetSize = Math.floor(Math.random() * 5) + 2;
+            for (let i = 1; i <= fleetSize; i++) {
+                this.addFish(data, i);
+            }
+        }
+        addFish(data, fleetId = 1) {
+            // 根據 data 中的 pathId 選擇路徑
+            let path = this.paths['p01'];
             if (!path) {
                 console.error(`Path ${data.pathId} not found.`);
                 return;
             }
+            // 計算魚的初始位置和角度
+            let offsetX = this.path01[0] , offsetY = this.path01[1] + 100;
+            console.log('offsetX:', offsetX, 'offsetY:', offsetY)
+            let radius = 50; // 圍繞中心魚的半徑
+            if (fleetId > 3) { radius += 50;}
+            if (fleetId !== 1) { // 不是中心魚時，計算偏移
+                // Random angle
+                let angle = Phaser.Math.DegToRad(Math.random() * 360);
+                offsetX += Math.cos(angle) * radius;
+                offsetY += Math.sin(angle) * radius;
+            }
 
-            // 创建带有动画的鱼
-            let fish = this.add.follower(path, 0, 0, 'seacreatures');
-            fish.scaleX = -1; // 向右移動
-            if (data.pathId == 'p02') fish.scaleX = 1; // 向左移動
+            // 創建帶有動畫的魚
+            let fish = this.add.follower(path, offsetX, offsetY, 'seacreatures');
+            fish.scale = 0.5;
+            fish.scaleX *= -1; // 向右移動
+
 
             fish.startFollow({
-                positionOnPath: true,
+                positionOnPath: false, //需要設定初始位置
                 duration: 10000, // 鱼沿着路径移动所需的时间（毫秒）
                 yoyo: false, // 如果想要鱼移动到路径末端然后返回，设置为 true
                 repeat: -1, // -1 表示无限循环
@@ -314,31 +339,27 @@
                 verticalAdjust: true // 如果需要，可以调整鱼的垂直对齐
             }).play(data.type);
 
-
             fish.setInteractive();
             fish.on('pointerover', () => {
-                fish.setTint(0xff0000);  // Change color to a lighter shade
+                fish.setTint(0xff0000);
             });
             fish.on('pointerout', () => {
-                fish.clearTint();  // Remove tint effect
+                fish.clearTint();
             });
+
             this.fishes.add(fish);
             fish.setData('isFish', true);
             fish.setData('type', data.type);
             fish.setData('speed', data.speed);
-            fish.setData('id', data.id);
+            fish.setData('id', data.id + "." + fleetId); // 使用 fleetId 修改 ID
             fish.setData('previousX', data.x);
             fish.setData('previousY', data.y);
             fish.setData('timestamp', data.timestamp);
             fish.setData('durationMS', data.durationMS);
             fish.setData('pathId', data.pathId);
             fish.body.mass = config.fishMass;
-            fish.body.setSize(1, 1);// to make the physical collision area at the center of fish
-            //this.physics.velocityFromRotation(data.angle, data.speed*300, fish.body.velocity);
-            //fish.setCollideWorldBounds(true);
-            //setCollideWorldBounds
+            fish.body.setSize(1, 1);
             fish.body.onWorldBounds = true;
-            //fish.setBounce(1);
         }
 
         startAutoShooting() {
@@ -461,7 +482,7 @@
     }
 
     const config = {
-        type: Phaser.AUTO,
+        type: Phaser.WEBGL,
         parent: 'phaser-example',
         width: 800,
         height: 600,
@@ -473,7 +494,7 @@
             default: 'arcade',
             arcade: {
                 gravity: {y: 0},
-                debug: true
+                debug: false
             }
         },
         scene: MainScene
