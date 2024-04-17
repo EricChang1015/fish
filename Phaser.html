@@ -10,19 +10,17 @@
     class MainScene extends Phaser.Scene {
         constructor() {
             super();
-            this.path01 = [0,100, 164, 46, 274, 142, 412, 57, 522, 141, 664, 64, 800, 140];
+            this.path01 = [-10,200, 164, 146, 274, 242, 412, 157, 522, 241, 664, 164, 810, 240, 1000,240];
+            this.path02 = [810, 340, 664, 464, 522, 341, 412, 457, 274, 342, 164, 446, -10,350, -200,350 ];
+            this.path03 = [100,0, 150,100, 200,250, 250,400, 300,450, 375,470, 450,450, 500,400, 550,250, 600,100, 750,0, 750,-200];
+            this.path04 = [810, 500, 700, 300, 600, 200, 400, 100, 200, 200, 100, 300, -10,500, -200,500]
+
             // 预定义的路径
             this.paths = {
-                //p01: new Phaser.Curves.Ellipse(700, 600, 900, 400),
-                p02: new Phaser.Curves.Ellipse(-100, 50, 800, 400),
-                p03: new Phaser.Curves.Ellipse(-100, 600, 900, 400),
-                p04: new Phaser.Curves.Ellipse(700, 50, 800, 400),
-                //splineTo from path01's second point to end
-                p01: new Phaser.Curves.Path(0, 100).splineTo(this.path01.splice(2)),
-                //p02: new Phaser.Curves.Path(800, 500).splineTo([664, 464, 522, 541, 412, 457, 274, 542, 164, 446, 0, 542]),
-                //p04: new Phaser.Curves.Path(50, 300).lineTo(400, 100).lineTo(750, 300).lineTo(400, 500).lineTo(50, 300), // 示例路径
-
-                // 可以定义更多路径...
+                p01: new Phaser.Curves.Path(this.path01[0],this.path01[1]).splineTo(this.path01.slice(2)),
+                p02: new Phaser.Curves.Path(this.path02[0],this.path02[1]).splineTo(this.path02.slice(2)),
+                p03: new Phaser.Curves.Path(this.path03[0],this.path03[1]).splineTo(this.path03.slice(2)),
+                p04: new Phaser.Curves.Path(this.path04[0],this.path04[1]).splineTo(this.path04.slice(2)),
             };
         }
         preload() {
@@ -77,6 +75,7 @@
 
             this.fishes = this.physics.add.group();
             this.bullets = this.physics.add.group();
+            this.lastFired = 0;
 
             this.input.on('pointermove', (pointer) => {
                 this.cannon = this.playerPosition === 0 ? this.cannon1Head : this.cannon2Head;
@@ -93,44 +92,57 @@
             const graphics = this.add.graphics();
             graphics.lineStyle(1, 0xffffff, 1);
 
-            this.paths.p01.draw(graphics, 128);
-            this.paths.p02.draw(graphics, 128);
-            this.paths.p03.draw(graphics, 128);
-            this.paths.p04.draw(graphics, 128);
+            if (config.physics.arcade.debug) {
+                // 绘制路径
+                this.paths.p01.draw(graphics, 128);
+                this.paths.p02.draw(graphics, 128);
+                this.paths.p03.draw(graphics, 128);
+                this.paths.p04.draw(graphics, 128);
+            }
 
-
-            // 添加自動射擊功能
             this.autoShootEnabled = false;
-            this.autoShootButton = this.add.text(config.width / 2 - 100, 10, 'Auto Shoot: OFF', {
-                font: 'bold 16px Arial',
-                fill: '#f10f4b'
-            })
-                .setInteractive()
-                .on('pointerdown', () => {
-                    this.autoShootEnabled = !this.autoShootEnabled;
-                    this.autoShootButton.setText(`Auto Shoot: ${this.autoShootEnabled ? 'ON' : 'OFF'}`);
-                    if (this.autoShootEnabled) {
-                        this.startAutoShooting();
-                    }
-                });
+            const button = this.add.text(400, 20, 'Auto Shoot: OFF', {
+                fontFamily: 'Arial',
+                fontSize: '16px',
+                color: '#ffffff',
+                align: 'center',
+                fixedWidth: 150,
+                backgroundColor: '#869fe0'
+            }).setPadding(1).setOrigin(0.5);
 
+            button.setInteractive({ useHandCursor: true });
+
+            button.on('pointerover', () => {
+                button.setBackgroundColor('#8d8d8d');
+            });
+
+            button.on('pointerout', () => {
+                button.setBackgroundColor('#2d2d2d');
+            });
+
+            button.on('pointerup', () => {
+                this.autoShootEnabled = !this.autoShootEnabled;
+                button.setText(`Auto Shoot: ${this.autoShootEnabled ? 'ON' : 'OFF'}`);
+                if (this.autoShootEnabled) {
+                    this.startAutoShooting();
+                } else {
+                    this.autoShootTimer.remove(false);
+                }
+            });
 
             // 点击发射子弹
             this.input.on('pointerdown', (pointer, gameObjects) => {
                 if (gameObjects.length > 0 && gameObjects[0].getData('isFish') === true) {
                     let fish = gameObjects[0]; // Get the first clicked object which should be a fish
                     if (this.autoShootEnabled) {
+                        this.fishes.getChildren().forEach(fish => fish.setData('autoShoot', false));
                         console.log('auto shoot enabled fish.id:' + fish.getData('id'));
                         fish.setData('autoShoot', true);
                     }
-                    this.shootBullet(pointer, fish);
                 } else {
                     this.shootBullet(pointer);
                 }
             });
-            // 示例添加鱼
-            //this.addAnimatedFish({type: 'Fish_001', x: 400, y: 100, speed: 0.2, id: 'f01_gR5NHC', angle:  Math.PI});
-            // 这里可以通过socket或者其他方式接收服务器的鱼数据，然后生成鱼
             this.websocketHandler();
         }
 
@@ -148,8 +160,6 @@
                         let position = data.result.position;
                         let balance = data.result.balance;
                         _this.cannonBalanceText[position].setText(`Balance: ${balance}`);
-
-                        console.log('hit:', data.result.fish.id);
                         // 從fishes群組中獲取所有魚的數組
                         let fishesArray = _this.fishes.getChildren();
                         // 查找id匹配的魚
@@ -177,7 +187,6 @@
                             console.log('mismatch');
                         }
                     } else {
-                        console.log('miss');
                         // update balance of player
                         let position = data.result.position;
                         let balance = data.result.balance;
@@ -215,14 +224,29 @@
 
         update() {
             // Existing update logic...
-            if (this.autoShootEnabled && this.fishes.getChildren().length > 0) {
+            if (this.input.activePointer.isDown) {
+                let time = this.time.now;
+                // 如果鼠标按下，发射子弹, 最快每秒5次
+                if (time - this.lastFired > 200) { // 200ms between shots, so 5 shots per second
+                    this.shootBullet(this.input.activePointer);
+                    this.lastFired = time;
+                }
+            } else if (this.autoShootEnabled && this.fishes.getChildren().length > 0) {
                 // 鎖定魚隻, 只取一隻
                 let target = this.fishes.getChildren().find(fish => fish.getData('autoShoot'));
                 if (target) {
-                    this.customCursor.setPosition(target.x, target.y);
-                    this.customCursor.setDepth(1000);
-                    this.customCursor.setVisible(true);
-                    this.cannon.rotation = Phaser.Math.Angle.Between(this.cannon.x, this.cannon.y, target.x, target.y);
+                    let positionX = target.x;
+                    let positionY = target.y;
+                    // if target fish not in active window, then set autoShoot to false
+                    if (target && (positionX <= 10 || positionX >= config.width-10 || positionY <= 10 || positionY >= config.height-10)) {
+                        target.setData('autoShoot', false);
+                        this.customCursor.setVisible(false);
+                    } else {
+                        this.customCursor.setPosition(positionX, positionY);
+                        this.customCursor.setDepth(1000);
+                        this.customCursor.setVisible(true);
+                        this.cannon.rotation = Phaser.Math.Angle.Between(this.cannon.x, this.cannon.y, positionX, positionY);
+                    }
                 } else {
                     this.customCursor.setVisible(false);
                 }
@@ -300,26 +324,26 @@
         // 當需要添加一組魚時
         addFleet(data) {
             // random number from 3 to 10
-            const fleetSize = Math.floor(Math.random() * 5) + 2;
+            const fleetSize = pseudoRandom(3, 10, data.id);
             for (let i = 1; i <= fleetSize; i++) {
                 this.addFish(data, i);
             }
         }
         addFish(data, fleetId = 1) {
             // 根據 data 中的 pathId 選擇路徑
-            let path = this.paths['p01'];
+            let path = this.paths[data.pathId];
+            let fishId = data.id + '.' + fleetId;
             if (!path) {
                 console.error(`Path ${data.pathId} not found.`);
                 return;
             }
             // 計算魚的初始位置和角度
-            let offsetX = this.path01[0] , offsetY = this.path01[1] + 100;
-            console.log('offsetX:', offsetX, 'offsetY:', offsetY)
+            let offsetX = this.paths[data.pathId].startPoint.x , offsetY = this.paths[data.pathId].startPoint.y;
             let radius = 50; // 圍繞中心魚的半徑
             if (fleetId > 3) { radius += 50;}
             if (fleetId !== 1) { // 不是中心魚時，計算偏移
                 // Random angle
-                let angle = Phaser.Math.DegToRad(Math.random() * 360);
+                let angle = Phaser.Math.DegToRad(pseudoRandom(0, 360, fishId));
                 offsetX += Math.cos(angle) * radius;
                 offsetY += Math.sin(angle) * radius;
             }
@@ -327,8 +351,11 @@
             // 創建帶有動畫的魚
             let fish = this.add.follower(path, offsetX, offsetY, 'seacreatures');
             fish.scale = 0.5;
-            fish.scaleX *= -1; // 向右移動
 
+            // 向右移動
+            if ((data.pathId === 'p01') || (data.pathId === 'p03'))  {
+                fish.scaleX *= -1;
+            }
 
             fish.startFollow({
                 positionOnPath: false, //需要設定初始位置
@@ -351,7 +378,7 @@
             fish.setData('isFish', true);
             fish.setData('type', data.type);
             fish.setData('speed', data.speed);
-            fish.setData('id', data.id + "." + fleetId); // 使用 fleetId 修改 ID
+            fish.setData('id', fishId); // 使用 fleetId 修改 ID
             fish.setData('previousX', data.x);
             fish.setData('previousY', data.y);
             fish.setData('timestamp', data.timestamp);
@@ -365,7 +392,7 @@
         startAutoShooting() {
             console.log('start auto shooting');
             this.autoShootTimer = this.time.addEvent({
-                delay: 500, // 100 ms between shots
+                delay: 200, // 200 ms between shots
                 callback: () => {
                     if (!this.autoShootEnabled) {
                         console.log('stop auto shooting')
@@ -374,7 +401,6 @@
                     }
                     let target = this.fishes.getChildren().find(fish => fish.getData('autoShoot'));
                     if (target !== undefined) {
-                        console.log('auto shoot target:', target.getData('id'));
                         this.shootBullet(target, target);
                     }
                 },
@@ -467,6 +493,35 @@
         }
     }
 
+    function pseudoRandom(min, max, seed) {
+        // 將種子字串轉化為哈希碼
+        function hashSeed(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // 轉換為32bit整數
+            }
+            return hash;
+        }
+
+        // 種子值，使用種子字串的哈希
+        const seedHash = hashSeed(seed);
+
+        // 使用一個簡單的線性同餘生成器(LCG)計算隨機數
+        function seededRandom(seed) {
+            const a = 1664525;
+            const c = 1013904223;
+            const m = 4294967296; // 2^32
+            return (a * seed + c) % m;
+        }
+
+        // 生成隨機數
+        const randomValue = seededRandom(seedHash);
+
+        // 將隨機數映射到[min, max)範圍
+        return min + (randomValue % (max - min));
+    }
     function generateBulletID() {
         return generateRandomString(12)
     }
