@@ -265,40 +265,6 @@
                 }
             });
 
-            for (const fish of this.fishes.getChildren()) {
-                // // 檢查x位置是否變化，以確定是否需要翻轉
-                // let previousX = fish.getData('previousX');
-                // let PreviousY = fish.getData('previousY');
-                // let diffX = fish.body.x - previousX;
-                // let diffY = fish.body.y - PreviousY;
-                // if (Math.abs(diffX) > 1) {
-                //     if (diffX > 0) {
-                //         fish.scaleX = -1; // 向右移動
-                //     } else if (diffX < 0) {
-                //         fish.scaleX = 1; // 向左移動
-                //     }
-                //     fish.setData('previousX', fish.body.x); // 更新前一位置，以便下次比較
-                // }
-                // if (Math.abs(diffY) > 1) {
-                //     // 透過diffX,與diffY的比較，來決定魚的角度
-                //     //fish.angle = Math.atan2(Math.abs(1), Math.abs(1)) * 180 / Math.PI;
-                //     fish.setData('previousY', fish.body.y);
-                // }
-                this.checkFishValid(fish);
-            }
-        }
-
-        checkFishValid(fish) {
-            const timestamp = fish.getData('timestamp');
-            const durationMS = fish.getData('durationMS');
-            const isActive = (Date.now() < (timestamp + durationMS));
-
-            if (!isActive && fish.active) {
-                if (fish.getData('autoShoot')) {
-                    this.customCursor.setVisible(false);
-                }
-                fish.destroy();
-            }
         }
 
         showCaptureAnimation(fish) {
@@ -359,11 +325,17 @@
 
             fish.startFollow({
                 positionOnPath: false, //需要設定初始位置
-                duration: 10000, // 鱼沿着路径移动所需的时间（毫秒）
+                duration: data.durationMS, // 鱼沿着路径移动所需的时间（毫秒）
                 yoyo: false, // 如果想要鱼移动到路径末端然后返回，设置为 true
-                repeat: -1, // -1 表示无限循环
                 rotateToPath: false, // 自动旋转鱼以匹配路径方向
-                verticalAdjust: true // 如果需要，可以调整鱼的垂直对齐
+                verticalAdjust: true, // 如果需要，可以调整鱼的垂直对齐
+                repeat: 0, // 重复0次
+                onComplete: () => {
+                    if (fish.getData('autoShoot')) {
+                        this.customCursor.setVisible(false);
+                    }
+                    fish.destroy(); // 所有闪烁完成后，销毁鱼对象
+                }
             }).play(data.type);
 
             fish.setInteractive();
