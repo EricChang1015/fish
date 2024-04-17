@@ -29,7 +29,7 @@ function getFish() {
             angle: (Math.random() * 120 - 60 + angleOffset[xPositionIndex]) / 180 * Math.PI, // -60 to 60 degree
             speed: 0.5,
             timestamp: Date.now(),
-            durationMS: (fishTypesIndex + 1) * 5000
+            durationMS: (fishTypesIndex + 3) * 3000 + 5000
         }
     };
 }

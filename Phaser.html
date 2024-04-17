@@ -167,7 +167,6 @@
                         if (foundFish) {
                             // 播放音效
                             _this.sound.playAudioSprite('sfx', 'death');
-
                             // 显示获胜金额
                             let winText = _this.add.text(foundFish.x, foundFish.y, `+${data.result.transaction.win}`, { fontSize: '20px', fill: '#dabb0d' });
                             winText.setOrigin(0.5, 0.5); // 使文本居中显示
@@ -272,7 +271,7 @@
             this.fishes.remove(fish);
             this.tweens.add({
                 targets: fish, // 目标是被击中的鱼
-                scale: {from: 1, to: 1.5},
+                scale: {from: fish.scale, to: fish.scale * 1.5},
                 alpha: {from: 1, to: 0},
                 ease: 'Linear',
                 duration: 100, // 持续时间100毫秒
@@ -290,7 +289,27 @@
         // 當需要添加一組魚時
         addFleet(data) {
             // random number from 3 to 10
-            const fleetSize = pseudoRandom(3, 10, data.id);
+            let weight = 1;
+            switch (data.type) {
+                case 'Fish_001':
+                    weight = 5;
+                    break;
+                case 'Fish_002':
+                    weight = 4;
+                    break;
+                case 'Fish_003':
+                    weight = 3;
+                    break;
+                case 'Fish_004':
+                    weight = 2;
+                    break;
+                case 'Fish_005':
+                    weight = 1;
+                    break;
+            }
+            const min = 3;
+            const max = weight * 2 + min;
+            const fleetSize = pseudoRandom(min, max, data.id);
             for (let i = 1; i <= fleetSize; i++) {
                 this.addFish(data, i);
             }
@@ -316,7 +335,8 @@
 
             // 創建帶有動畫的魚
             let fish = this.add.follower(path, offsetX, offsetY, 'seacreatures');
-            fish.scale = 0.5;
+            let randomScale = pseudoRandom(4, 8, fishId)
+            fish.scale =  randomScale / 10;
 
             // 向右移動
             if ((data.pathId === 'p01') || (data.pathId === 'p03'))  {
@@ -474,7 +494,7 @@
                 hash = ((hash << 5) - hash) + char;
                 hash = hash & hash; // 轉換為32bit整數
             }
-            return hash;
+            return Math.abs(hash);
         }
 
         // 種子值，使用種子字串的哈希
@@ -482,15 +502,15 @@
 
         // 使用一個簡單的線性同餘生成器(LCG)計算隨機數
         function seededRandom(seed) {
-            const a = 1664525;
-            const c = 1013904223;
-            const m = 4294967296; // 2^32
+            if (seed === 295362091) seed = 1;
+            const a = 165403;
+            const c = 51654324;
+            const m = 2147483647; // 2^32
             return (a * seed + c) % m;
         }
 
         // 生成隨機數
         const randomValue = seededRandom(seedHash);
-
         // 將隨機數映射到[min, max)範圍
         return min + (randomValue % (max - min));
     }
