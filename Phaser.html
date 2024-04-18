@@ -282,6 +282,14 @@
                 }
             });
 
+            for (const fish of this.fishes.getChildren()) {
+                if (Date.now() >= fish.getData('timestamp') + fish.getData('durationMS') && fish.active) {
+                    if (fish.getData('autoShoot')) {
+                        this.customCursor.setVisible(false);
+                    }
+                    fish.destroy();
+                }
+            }
         }
 
         showCaptureAnimation(fish) {
