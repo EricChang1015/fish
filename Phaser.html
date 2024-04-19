@@ -2,8 +2,12 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>简易捕鱼游戏Demo - Phaser版本</title>
+    <title>簡易版捕魚</title>
     <script src="public/libs/phaser.js"></script>
+    <!--- for iphone debug -->
+    <script src="//cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
+    <!--- for iphone debug -->
 </head>
 <body>
 <script>
@@ -35,16 +39,20 @@
             this.load.image('aim', 'public/assets/img/aim.png');
             this.load.image('bullet', 'public/assets/img/bullet.png');
             this.load.audioSprite('sfx', 'public/assets/audio/fx_mixdown.json', [
-                'public/assets/audio/fx_mixdown.ogg'
+                'public/assets/audio/fx_mixdown.ogg',
+                'public/assets/audio/fx_mixdown.mp3'// for iphone
             ]);
 
             // 加载鱼的动画
             this.load.atlas('sea', 'public/assets/animations/seacreatures_json.png', 'public/assets/animations/seacreatures_json.json');
 
+            this.load.on('loaderror', (file) => {
+                console.error('Error loading:', file.key);
+            });
         }
 
         create() {
-            // size of the game
+            this.sound.volume = 0.05;//降低音量
             this.add.image(400, 300, 'undersea');
             this.add.image(0, 466, 'coral').setOrigin(0);
             // for aimed object.
@@ -67,7 +75,13 @@
             this.cannon1Balance = 1000;
             this.cannon2Balance = 1000;
             this.cannonBalanceText = [{}, {}];
-            this.add.text(0, 0, `Version: ${config.version}`, {
+            this.RoomText = this.add.text(0, 0, `RoomId: N/A`, {
+                fontFamily: 'Arial',
+                fontSize: '12px',
+                color: '#ffffff',
+                padding: {left: 10, right: 10, top: 5, bottom: 5}
+            });
+            this.add.text(0, 20, `Version: ${config.version}`, {
                 fontFamily: 'Arial',
                 fontSize: '12px',
                 color: '#ffffff',
@@ -91,7 +105,6 @@
             this.fishes = this.physics.add.group();
             this.bullets = this.physics.add.group();
             this.lastFired = 0;
-
             this.input.on('pointermove', (pointer) => {
                 this.cannon = this.playerPosition === 0 ? this.cannon1Head : this.cannon2Head;
                 angle = Phaser.Math.Angle.BetweenPoints(this.cannon, pointer);
@@ -225,6 +238,7 @@
                 }
                 switch (data.action) {
                     case 'setPosition':
+                        _this.RoomText.setText(`RoomId: ${data.room}`);
                         _this.playerPosition = data.position;
                         // 根据分配的位置调整炮台位置
                         this.cannon = this.playerPosition === 0 ? this.cannon1Head : this.cannon2Head;
@@ -609,7 +623,7 @@
     }
 
     const config = {
-        type: Phaser.WEBGL,
+        type: Phaser.AUTO,
         parent: 'phaser-example',
         width: 800,
         height: 600,
@@ -625,10 +639,10 @@
             }
         },
         scene: MainScene,
-        version: '2024.04.18',
+        version: '2024.04.19.v03',
         backend: 'wss://uat.aspectgaming.com/fish',
         backendTest: 'ws://localhost:8080',
-        release: false
+        release: true
     };
 
     const game = new Phaser.Game(config);

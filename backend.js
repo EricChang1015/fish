@@ -1,55 +1,80 @@
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({port: 8080});
 const { getFish, processHit, setBalance } = require('./gameLogic');
-let positions = [null, null]; // 兩個位置，初始時都是空的
-
+// 管理最多10個房間，每個房間2個位置
+let rooms = Array.from({ length: 10 }, () => [null, null]);
 wss.on('connection', function connection(ws) {
-    console.log('A client connected');
-    const index = positions.indexOf(null);
-    if (index !== -1) {
-        const defaultBalance = 1000;
-        positions[index] = ws; // 分配位置
-        setBalance(index, defaultBalance); // 設置玩家初始balance
-        ws.send(JSON.stringify({action: 'setPosition', position: index})); // 通知玩家其位置
-        ws.send(JSON.stringify({action: "setPosition", position: index, balance: defaultBalance}));
-        const fishInfo = getFish();
-        broadcast(fishInfo);
-    } else {
-        ws.send(JSON.stringify({action: 'error', message: '尚無空位'}));
-        ws.close(); // 沒有位置時關閉連接
+    let assigned = false;
+    let roomIndex, positionIndex;
+
+    for (let i = 0; i < rooms.length; i++) {
+        positionIndex = rooms[i].indexOf(null);
+        if (positionIndex !== -1) {
+            roomIndex = i;
+            rooms[i][positionIndex] = ws;
+            assigned = true;
+            break;
+        }
+    }
+
+    if (!assigned) {
+        ws.send(JSON.stringify({action: 'error', message: '所有房間已滿'}));
+        ws.close();
         return;
     }
 
+    console.log(`A client connected to room ${roomIndex + 1}, position ${positionIndex + 1}`);
+    setBalance(positionIndex, 1000); // 設置玩家初始 balance
+    ws.send(JSON.stringify({action: "setPosition", room: roomIndex, position: positionIndex, balance: 1000}));
+
     ws.on('close', function () {
-        positions[index] = null; // 釋放位置
+        rooms[roomIndex][positionIndex] = null; // 釋放位置
+        console.log(`Client disconnected from room ${roomIndex + 1}, position ${positionIndex + 1}`);
     });
 
-    // 接收來自客戶端的訊息
-    ws.on('message', async function incoming(message) {
+    ws.on('message', function incoming(message) {
         const data = JSON.parse(message);
-        // 把訊息發送給所有連接的客戶端
-        broadcast(data);
         if (data.action === 'hit') {
-            broadcast(await processHit(data));
+            processHit(data).then(result => {
+                broadcastRoom(result, roomIndex); // 僅廣播到當前房間
+            });
+        } else {
+            broadcastRoom(data, roomIndex); // 僅廣播到當前房間
         }
     });
 });
 
-function broadcast(message) {
-    if (message === null) return;
-    wss.clients.forEach(function each(client) {
-        if (client.readyState === WebSocket.OPEN) {
+function broadcastRoom(message, roomIndex) {
+    rooms[roomIndex].forEach(client => {
+        if (client && client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify(message));
         }
     });
 }
 
+function broadcastAll(message) {
+    rooms.forEach(room => {
+        room.forEach(client => {
+            if (client && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify(message));
+            }
+        });
+    });
+}
+
+// 示例全局廣播，比如有人中了大獎
+function announceJackpot(winnerInfo) {
+    broadcastAll({action: 'jackpot', message: `恭喜 ${winnerInfo.name} 中大獎!`});
+}
 // 每三秒检查并发送鱼的信息
 setInterval(() => {
-    if (positions.some(position => position !== null)) {
-        const fishInfo = getFish();
-        broadcast(fishInfo);
-    }
+    const fishInfo = getFish();
+    rooms.forEach(room => {
+        // check if room has at least one player
+        if (room.some(client => client !== null)) {
+            broadcastRoom(fishInfo, rooms.indexOf(room));
+        }
+    });
 }, 5000); // 3000毫秒间隔
 
 
