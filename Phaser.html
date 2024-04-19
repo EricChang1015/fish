@@ -75,13 +75,19 @@
             this.cannon1Balance = 1000;
             this.cannon2Balance = 1000;
             this.cannonBalanceText = [{}, {}];
-            this.RoomText = this.add.text(0, 0, `RoomId: N/A`, {
+            this.RoomText = this.add.text(0, 0, `RoomId: `, {
                 fontFamily: 'Arial',
                 fontSize: '12px',
                 color: '#ffffff',
                 padding: {left: 10, right: 10, top: 5, bottom: 5}
             });
-            this.add.text(0, 20, `Version: ${config.version}`, {
+            this.add.text(0, 20, `F Version: ${config.version}`, {
+                fontFamily: 'Arial',
+                fontSize: '12px',
+                color: '#ffffff',
+                padding: {left: 10, right: 10, top: 5, bottom: 5}
+            });
+            this.add.text(0, 40, `B Version: `, {
                 fontFamily: 'Arial',
                 fontSize: '12px',
                 color: '#ffffff',
@@ -641,8 +647,9 @@
         scene: MainScene,
         version: '2024.04.19.v03',
         backend: 'wss://uat.aspectgaming.com/fish',
+        backend2: 'ws://uat.aspectgaming.com:8081',
         backendTest: 'ws://localhost:8080',
-        release: true
+        release: false
     };
 
     const game = new Phaser.Game(config);

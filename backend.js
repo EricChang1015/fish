@@ -1,9 +1,11 @@
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({port: 8080});
 const { getFish, processHit, setBalance } = require('./gameLogic');
+const version = '2024.4.19.v01';
+
 // 管理最多10個房間，每個房間2個位置
 let rooms = Array.from({ length: 10 }, () => [null, null]);
-wss.on('connection', function connection(ws) {
+wss.on('connection', function connection(ws, req) {
     let assigned = false;
     let roomIndex, positionIndex;
 
@@ -22,8 +24,10 @@ wss.on('connection', function connection(ws) {
         ws.close();
         return;
     }
-
-    console.log(`A client connected to room ${roomIndex + 1}, position ${positionIndex + 1}`);
+    const ip = req.headers['x-real-ip'] || req.headers['x-forwarded-for'];
+    console.log(req.socket)
+    const userAgent = req.headers['user-agent'];  // 客戶端使用的用戶代理，即設備信息
+    console.log(`A client connected to room ${roomIndex + 1}, position ${positionIndex + 1} From IP ${ip} using device ${userAgent}`);
     setBalance(positionIndex, 1000); // 設置玩家初始 balance
     ws.send(JSON.stringify({action: "setPosition", room: roomIndex, position: positionIndex, balance: 1000}));
 
@@ -34,12 +38,12 @@ wss.on('connection', function connection(ws) {
 
     ws.on('message', function incoming(message) {
         const data = JSON.parse(message);
+        broadcastRoomOtherPlayer(data, roomIndex, ws); // 僅廣播到當前房間
+
         if (data.action === 'hit') {
             processHit(data).then(result => {
                 broadcastRoom(result, roomIndex); // 僅廣播到當前房間
             });
-        } else {
-            broadcastRoom(data, roomIndex); // 僅廣播到當前房間
         }
     });
 });
@@ -47,6 +51,16 @@ wss.on('connection', function connection(ws) {
 function broadcastRoom(message, roomIndex) {
     rooms[roomIndex].forEach(client => {
         if (client && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(message));
+        }
+    });
+}
+
+function broadcastRoomOtherPlayer(message, roomIndex, senderWs) {
+    // 遍歷指定房間中的所有客戶端
+    rooms[roomIndex].forEach(client => {
+        // 確保客戶端存在且WebSocket連接是開放狀態，並且不是消息發送者
+        if (client && client !== senderWs && client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify(message));
         }
     });
