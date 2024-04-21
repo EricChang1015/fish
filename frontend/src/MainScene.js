@@ -1,5 +1,6 @@
-import { config } from './config.js';
+import {config} from './config.js';
 import * as utils from './utility.js';
+
 class MainScene extends Phaser.Scene {
     constructor() {
         super();
@@ -33,6 +34,8 @@ class MainScene extends Phaser.Scene {
 
         // 加载鱼的动画
         this.load.atlas('sea', 'public/assets/animations/seacreatures_json.png', 'public/assets/animations/seacreatures_json.json');
+        // 加载爆炸动画
+        this.load.spritesheet('boom', 'public/assets/animations/explosion.png', { frameWidth: 64, frameHeight: 64, endFrame: 23 });
 
         this.load.on('loaderror', (file) => {
             console.error('Error loading:', file.key);
@@ -80,8 +83,8 @@ class MainScene extends Phaser.Scene {
         this.drawRoutes()
         this.createControlButtons();
 
+        this.boom = this.add.sprite(0, 0, 'boom').setScale(1).setVisible(false);
 
-        // 点击发射子弹
         this.input.on('pointerdown', (pointer, gameObjects) => {
             if (gameObjects.length > 0 && gameObjects[0].getData('isFish') === true) {
                 let fish = gameObjects[0]; // Get the first clicked object which should be a fish
@@ -94,8 +97,11 @@ class MainScene extends Phaser.Scene {
                     this.shootBullet(pointer, fish);
                 }
             } else {
-                this.lastFired = this.time.now;
-                this.shootBullet(pointer);
+                // 避免click 到toggle button發射子彈
+                if (gameObjects.length === 0) {
+                    this.lastFired = this.time.now;
+                    this.shootBullet(pointer);
+                }
             }
         });
         this.websocketHandler();
@@ -117,6 +123,7 @@ class MainScene extends Phaser.Scene {
         this.anims.create({ key: 'Fish_003', frames: this.anims.generateFrameNames('sea', { prefix: 'octopus', end: 24, zeroPad: 4 }), repeat: -1 });
         this.anims.create({ key: 'Fish_004', frames: this.anims.generateFrameNames('sea', { prefix: 'purpleFish', end: 20, zeroPad: 4 }), repeat: -1 });
         this.anims.create({ key: 'Fish_005', frames: this.anims.generateFrameNames('sea', { prefix: 'stingray', end: 23, zeroPad: 4 }), repeat: -1 });
+        this.anims.create({ key: 'explode', frames: 'boom', frameRate: 20, showOnStart: true, hideOnComplete: true});
     }
 
     drawRoutes() {
@@ -131,7 +138,7 @@ class MainScene extends Phaser.Scene {
     createControlButtons() {
         this.autoShootEnabled = false;
         const button = this.add.text(300, 20, 'Auto Shoot: OFF', this.getTextStyle()).setOrigin(0.5).setInteractive({useHandCursor: true});
-        button.on('pointerup', () => {
+        button.on('pointerdown', () => {
             this.autoShootEnabled = !this.autoShootEnabled;
             button.setText(`Auto Shoot: ${this.autoShootEnabled ? 'ON' : 'OFF'}`);
             if (this.autoShootEnabled) {
@@ -140,14 +147,19 @@ class MainScene extends Phaser.Scene {
                 this.autoShootTimer.remove(false);
             }
         });
+        button.setData('button', true);
 
         this.bulletType = 'bullet';
-        const toggleBulletTypeButton = this.add.text(500, 20, 'Change Bullet: NORMAL', this.getTextStyle()).setInteractive().setOrigin(0.5);
+        const toggleBulletTypeButton = this.add.text(500, 20, 'Change Bullet: NORMAL', this.getTextStyle()).setInteractive({useHandCursor: true}).setOrigin(0.5);
         toggleBulletTypeButton.on('pointerdown', () => {
-            this.bulletType = this.bulletType === 'bullet' ? 'laser' : 'bullet';
+            const bulletTypes = ['bullet', 'laser', 'missile']; // Add 'missile' as a new type
+            let currentIndex = bulletTypes.indexOf(this.bulletType);
+            this.bulletType = bulletTypes[(currentIndex + 1) % bulletTypes.length]; // Cycle through bullet types
             toggleBulletTypeButton.setText(`Change Bullet: ${this.bulletType.toUpperCase()}`);
         });
+        toggleBulletTypeButton.setData('button', true);
     }
+
     websocketHandler() {
         let _this = this;
         const backend = config.release === true ? config.backend : config.backendTest;
@@ -164,29 +176,35 @@ class MainScene extends Phaser.Scene {
                     _this.cannonBalanceText[position].setText(`Balance: ${balance}`);
                     // 從fishes群組中獲取所有魚的數組
                     let fishesArray = _this.fishes.getChildren();
-                    // 查找id匹配的魚
-                    let foundFish = fishesArray.find(fish => fish.getData('id') === data.result.fish.id);
-                    if (foundFish) {
-                        // 播放音效
-                        _this.sound.playAudioSprite('sfx', 'death');
-                        // 显示获胜金额
-                        let winText = _this.add.text(foundFish.x, foundFish.y, `+${data.result.transaction.win}`, { fontSize: '20px', fill: '#dabb0d' });
-                        winText.setOrigin(0.5, 0.5); // 使文本居中显示
-                        // 使文本在一段时间后消失
-                        _this.tweens.add({
-                            targets: winText,
-                            alpha: {from: 1, to: 0},
-                            ease: 'Linear', // 线性变化
-                            duration: 1000, // 持续时间为1000毫秒
-                            onComplete: () => {
-                                winText.destroy(); // 文本消失后销毁文本对象
-                            }
-                        });
-                        _this.showCaptureAnimation(foundFish);
-                    } else {
-                        // 如果沒有找到匹配的魚
-                        console.log('mismatch');
+                    for (let hitFish of data.result.fishes) {
+                        // 查找id匹配的魚
+                        let foundFish = fishesArray.find(fish => fish.getData('id') === hitFish.id);
+                        if (foundFish) {
+                            // 播放音效
+                            _this.sound.playAudioSprite('sfx', 'death');
+                            // 显示获胜金额
+                            let winText = _this.add.text(foundFish.x, foundFish.y, `+${data.result.transaction.win}`, {
+                                fontSize: '20px',
+                                fill: '#dabb0d'
+                            });
+                            winText.setOrigin(0.5, 0.5); // 使文本居中显示
+                            // 使文本在一段时间后消失
+                            _this.tweens.add({
+                                targets: winText,
+                                alpha: {from: 1, to: 0},
+                                ease: 'Linear', // 线性变化
+                                duration: 1000, // 持续时间为1000毫秒
+                                onComplete: () => {
+                                    winText.destroy(); // 文本消失后销毁文本对象
+                                }
+                            });
+                            _this.showCaptureAnimation(foundFish);
+                        } else {
+                            // 如果沒有找到匹配的魚
+                            console.log('mismatch');
+                        }
                     }
+
                 } else {
                     // update balance of player
                     let position = data.result.position;
@@ -229,22 +247,24 @@ class MainScene extends Phaser.Scene {
         const pointer = this.input.activePointer;
         if (pointer.isDown) {
             let time = this.time.now;
-            const delayTime = this.bulletType === 'bullet' ? 200 : 20;
+            const delayTime = this.bulletType === 'laser' ? 20 : (this.bulletType === 'bullet' ? 200 : 1500);
             // 如果鼠标按下，发射子弹, 最快每秒5次
             if (time - this.lastFired > delayTime) { // 200ms between shots, so 5 shots per second
-                let fired = false;
+                let needFire = true;
                 this.children.list.forEach((child) => {
-                    if (fired === false && child.getBounds && pointer.isDown) {
+                    if (needFire === true && child.getBounds && pointer.isDown) {
                         const bounds = child.getBounds();
                         if (bounds.contains(pointer.x, pointer.y)) {
                             if (child.getData('isFish')) {
                                 this.shootBullet(pointer, child);
-                                fired = true;
+                                needFire = false;
+                            } else if (child.getData('button')){
+                                needFire = false
                             }
                         }
                     }
                 });
-                if (!fired) this.shootBullet(pointer);
+                if (needFire) this.shootBullet(pointer);
                 this.lastFired = time;
             }
         } else if (this.autoShootEnabled && this.fishes.getChildren().length > 0) {
@@ -293,6 +313,7 @@ class MainScene extends Phaser.Scene {
 
     showCaptureAnimation(fish) {
         fish.stopFollow(); // 停止沿路径移动
+        this.boom.setDepth(999).copyPosition(fish.body.position).play('explode');
         this.fishes.remove(fish);
         this.tweens.add({
             targets: fish, // 目标是被击中的鱼
@@ -438,25 +459,48 @@ class MainScene extends Phaser.Scene {
     shootBullet(pointer, targetFish = null) {
         const bulletId = utils.generateRandomString(12);
         let bullet = this.bullets.create(this.cannon.x, this.cannon.y, 'bullet');
-        if (this.bulletType === 'laser') {
+        let targetX = pointer.x;
+        let targetY = pointer.y;
+
+        if (this.bulletType === 'missile') {
+            bullet.setDisplaySize(200, 200);
+            if (targetFish) {
+                // 如果有目标鱼，则飞向目标鱼
+                targetX = targetFish.x;
+                targetY = targetFish.y;
+                this.physics.moveToObject(bullet, targetFish, config.bulletSpeed);
+            } else {
+                // 没有目标鱼，则飞向点击位置
+                let target = new Phaser.GameObjects.Sprite(this, pointer.x, pointer.y);
+                this.physics.moveToObject(bullet, target, config.bulletSpeed);
+            }
+
+            // 设置一个定时器来模拟导弹飞行时间并在到达后爆炸
+            this.time.delayedCall(500, () => {
+                this.explosionEffect(bullet, targetX, targetY);
+            }, [], this);
+        } else if (this.bulletType === 'laser') {
             bullet.setTint(0x00ff00);
             bullet.setDisplaySize(50, 50);
         } else {
             bullet.setDisplaySize(100, 100);
         }
         // set the rotation of the bullet to pointer
-        bullet.rotation = this.physics.moveToObject(bullet, pointer, config.bulletSpeed);
+        bullet.rotation = this.physics.moveToObject(bullet, { x: targetX, y: targetY }, config.bulletSpeed);
         bullet.body.mass = config.bulletMass;
         bullet.setData('id', bulletId);
         // 子弹的碰撞检测
-        this.physics.add.collider(bullet, this.fishes, this.hitFish, null, this);
+        if (this.bulletType !== 'missile') {
+            this.physics.add.collider(bullet, this.fishes, this.hitFish, null, this);
+        }
+
         // 播放音效
         this.sound.playAudioSprite('sfx', 'shot');
 
         let data = {
             type: this.bulletType,
-            x: this.cannon.x,
-            y: this.cannon.y,
+            x: targetX,
+            y: targetY,
             angle: bullet.rotation,
             speed: config.bulletSpeed,
             timestamp: Date.now(),
@@ -469,36 +513,69 @@ class MainScene extends Phaser.Scene {
         this.ws.send(JSON.stringify({action: 'fireBullet', bullet: data, position: this.playerPosition,}));
     }
 
+    explosionEffect(bullet, x, y, shoot = true) {
+        // 爆炸效果
+        const radius = 100;
+        const affectedFishes = this.fishes.getChildren().filter(fish => {
+            return Phaser.Math.Distance.Between(fish.x, fish.y, x, y) <= radius;
+        });
+
+        if (shoot) this.hitFishes(bullet, affectedFishes);
+        // 播放爆炸动画和声音
+        let explosion = this.add.sprite(x, y, 'boom').setScale(5);
+        explosion.play('explode');
+        this.sound.playAudioSprite('sfx', 'explode');
+    }
+
     showBullet(data, targetFishId = null) {
         let rotation = data.bullet.angle;
         let speed = config.bulletSpeed;
         this.cannonOpposite = this.playerPosition === 0 ? this.cannon2Head : this.cannon1Head;
         // 发射子弹
         let bullet = this.bullets.create(this.cannonOpposite.x, this.cannonOpposite.y, 'bullet');
-        if (data.bullet.type === 'laser') {
+        let targetX = data.bullet.x;
+        let targetY = data.bullet.y;
+        let targetFish = (targetFishId !== null) ? this.fishes.getChildren().find(fish => fish.getData('id') === targetFishId) : null;
+
+
+        if (data.bullet.type === 'missile') {
+            bullet.setDisplaySize(200, 200);
+            if (targetFish) {
+                // 如果有目标鱼，则飞向目标鱼
+                targetX = targetFish.x;
+                targetY = targetFish.y;
+                this.physics.moveToObject(bullet, targetFish, config.bulletSpeed);
+            } else {
+                // 没有目标鱼，则飞向点击位置
+                let target = new Phaser.GameObjects.Sprite(this, targetX, targetY);
+                this.physics.moveToObject(bullet, target, config.bulletSpeed);
+            }
+
+            // 设置一个定时器来模拟导弹飞行时间并在到达后爆炸
+            this.time.delayedCall(500, () => {
+                this.explosionEffect(bullet, targetX, targetY, false);
+            }, [], this);
+        } else  if (data.bullet.type === 'laser') {
             bullet.setTint(0x00ff00);
             bullet.setDisplaySize(50, 50);
         } else {
             bullet.setDisplaySize(100, 100);
         }
+        bullet.time = Date.now();
         bullet.rotation = rotation;
         bullet.body.mass = config.bulletMass;
         this.physics.velocityFromRotation(rotation, speed, bullet.body.velocity);
+        this.cannonOpposite.rotation = rotation;
+        this.sound.playAudioSprite('sfx', 'shot');
 
-        if (targetFishId !== null) {
-            let targetFish = this.fishes.getChildren().find(fish => fish.getData('id') === targetFishId);
+        if (this.bulletType !== 'missile') {
             if (targetFish) {
                 bullet.targetFish = targetFish;  // 将目标鱼设置为子弹的属性
                 this.physics.moveToObject(bullet, targetFish, config.bulletSpeed);
             }
+            // 子弹的碰撞检测
+            this.physics.add.collider(bullet, this.fishes, this.showHitFish, null, this);
         }
-        bullet.time = Date.now();
-
-        // 子弹的碰撞检测
-        this.physics.add.collider(bullet, this.fishes, this.showHitFish, null, this);
-        this.cannonOpposite.rotation = rotation;
-        // 播放音效
-        this.sound.playAudioSprite('sfx', 'shot');
     }
 
     showHitFish(bullet, fish) {
@@ -512,19 +589,49 @@ class MainScene extends Phaser.Scene {
         fish.body.stop(); // 避免子彈打到後, 對路徑的影響
         const bulletId = bullet.getData('id');
         bullet.destroy();
+
         // 播放音效
         this.sound.playAudioSprite('sfx', 'boss hit');
         // 这里可以发送击中信息给服务器
         //{"action":"hit","fish":{"type":"Fish_001","id":"f01_vDQvbz"},"bullet":{"id":"x8gCEtet0qJO"}}
         let data = {
             action: 'hit',
-            fish: {
+            fishes: [{
                 type: fish.getData('type'),
                 id: fish.getData('id')
-            },
+            }
+            ],
             bullet: {
                 id: bulletId,
                 bet: 5 //FIXME
+            },
+            position: this.playerPosition
+        };
+        //console.log('hit:', data);
+        this.ws.send(JSON.stringify(data));
+    }
+
+    hitFishes(bullet, fishes) {
+        const bulletId = bullet.getData('id');
+        bullet.destroy();
+        let hitFishes = [];
+
+        for (let fish of fishes) {
+            fish.body.stop(); // 避免子彈打到後, 對路徑的影響
+            hitFishes.push({
+                type: fish.getData('type'),
+                id: fish.getData('id')
+            })
+        }
+
+        // 这里可以发送击中信息给服务器
+        //{"action":"hit","fish":{"type":"Fish_001","id":"f01_vDQvbz"},"bullet":{"id":"x8gCEtet0qJO"}}
+        let data = {
+            action: 'hit',
+            fishes: hitFishes,
+            bullet: {
+                id: bulletId,
+                bet: 5 * hitFishes.length //FIXME
             },
             position: this.playerPosition
         };

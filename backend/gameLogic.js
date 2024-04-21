@@ -1,4 +1,4 @@
-const { pushData } = require('./database');
+const {pushData} = require('./database');
 const fishTypes = ["Fish_001", "Fish_002", "Fish_003", "Fish_004", "Fish_005"];
 const pathIds = ["p01", "p02", "p03", "p04"];
 let players = [{}, {}]; // 用來保存玩家的balance數據
@@ -6,6 +6,7 @@ let players = [{}, {}]; // 用來保存玩家的balance數據
 function setBalance(position, balance) {
     players[position].balance = balance;
 }
+
 function getFish() {
     const xPosition = [0, 800];
     const yPosition = [100, 200, 300, 400, 500];
@@ -33,42 +34,58 @@ function getFish() {
         }
     };
 }
+
 async function processHit(data) {
-    const fish = data.fish
     const bullet = data.bullet
     const position = data.position;
-    const bet = bullet.bet;
-    if (players[position] && players[position].balance >= bet) {
-        players[position].balance -= bet; // Deduct the bet from the player's balance
-        // 随机计算是否捕获鱼
-        const fishIndex =  fishTypes.indexOf(fish.type) + 1;
-        const isCaught = Math.random() < 1 / (fishIndex * 2);
-        let winAmount = 0;
-        if (isCaught) {
-            winAmount = bet * (fishIndex + 2);
-            players[position].balance += winAmount; // Update the balance with the win amount
-        }
-
-        let resultMessage = {
-            result: {
-                //Time with UTC format
-                time: new Date().toUTCString(),
-                hit: isCaught,
-                transaction: {id: "TRX" + generateRandomString(6), bet:bet, win: winAmount},
-                fish: fish,
-                bullet: bullet,
-                balance: players[position].balance,
-                position: position
+    if (players[position] && players[position].balance >= bullet.bet) {
+        players[position].balance -= bullet.bet; // Deduct the bet from the player's balance
+        const fishes = data.fishes;
+        if (fishes !== undefined) {
+            const numOfFishes = fishes.length;
+            const betPerFish = bullet.bet / numOfFishes;
+            let fishResults = [];
+            let winAmount = 0;
+            for (let fish of fishes) {
+                const result = hitResult(fish, betPerFish, position);
+                winAmount += result.win;
+                fishResults.push(result);
             }
-        };
-        await pushData(resultMessage.result); // Save the result to the database
-        console.log(resultMessage)
-        return resultMessage;
+            let resultMessage = {
+                result: {
+                    //Time with UTC format
+                    time: new Date().toUTCString(),
+                    hit: winAmount > 0,
+                    transaction: {id: "TRX" + generateRandomString(6), bet: bullet.bet, win: winAmount},
+                    fishes: fishResults,
+                    bullet: bullet,
+                    balance: players[position].balance,
+                    position: position
+                }
+            };
+            await pushData(resultMessage.result); // Save the result to the database
+            console.log(resultMessage)
+            return resultMessage;
+        }
     } else {
         //Error Handling
         console.log("Error: Player " + position + " does not have enough balance to bet " + bet);
         return null;
     }
+}
+
+function hitResult(fish, bet, position) {
+    const fishIndex = fishTypes.indexOf(fish.type) + 1;
+    const winMultiplier = (fishIndex * 2);
+    const isCaught = Math.random() < 1 / winMultiplier;
+    let winAmount = 0;
+    if (isCaught) {
+        winAmount = bet * winMultiplier;
+        players[position].balance += winAmount; // Update the balance with the win amount
+    }
+    fish.win = winAmount;
+
+    return fish
 }
 
 function generateRandomString(length) {
@@ -81,4 +98,4 @@ function generateRandomString(length) {
     return result;
 }
 
-module.exports = { getFish, processHit, setBalance };
+module.exports = {getFish, processHit, setBalance};

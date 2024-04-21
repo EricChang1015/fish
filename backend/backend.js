@@ -25,7 +25,6 @@ wss.on('connection', function connection(ws, req) {
         return;
     }
     const ip = req.headers['x-real-ip'] || req.headers['x-forwarded-for'];
-    console.log(req.socket)
     const userAgent = req.headers['user-agent'];  // 客戶端使用的用戶代理，即設備信息
     console.log(`A client connected to room ${roomIndex + 1}, position ${positionIndex + 1} From IP ${ip} using device ${userAgent}`);
     setBalance(positionIndex, 1000); // 設置玩家初始 balance
