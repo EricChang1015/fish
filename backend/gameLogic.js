@@ -64,7 +64,7 @@ async function processHit(data) {
                 }
             };
             await pushData(resultMessage.result); // Save the result to the database
-            console.log(resultMessage)
+            //console.log(resultMessage)
             return resultMessage;
         }
     } else {

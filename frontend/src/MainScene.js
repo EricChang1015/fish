@@ -313,7 +313,7 @@ class MainScene extends Phaser.Scene {
 
     showCaptureAnimation(fish) {
         fish.stopFollow(); // 停止沿路径移动
-        this.boom.setDepth(999).copyPosition(fish.body.position).play('explode');
+        //this.boom.setDepth(999).copyPosition(fish.body.position).play('explode');
         this.fishes.remove(fish);
         this.tweens.add({
             targets: fish, // 目标是被击中的鱼
@@ -473,6 +473,7 @@ class MainScene extends Phaser.Scene {
                 // 没有目标鱼，则飞向点击位置
                 let target = new Phaser.GameObjects.Sprite(this, pointer.x, pointer.y);
                 this.physics.moveToObject(bullet, target, config.bulletSpeed);
+                target.destroy();
             }
 
             // 设置一个定时器来模拟导弹飞行时间并在到达后爆炸
@@ -520,11 +521,13 @@ class MainScene extends Phaser.Scene {
             return Phaser.Math.Distance.Between(fish.x, fish.y, x, y) <= radius;
         });
 
-        if (shoot) this.hitFishes(bullet, affectedFishes);
-        // 播放爆炸动画和声音
-        let explosion = this.add.sprite(x, y, 'boom').setScale(5);
-        explosion.play('explode');
-        this.sound.playAudioSprite('sfx', 'explode');
+        if (shoot) {
+            this.hitFishes(bullet, affectedFishes);
+        } else {
+            bullet.destroy();
+        }
+        // 播放爆炸动画
+        this.add.sprite(x, y, 'boom').setScale(5).play('explode');
     }
 
     showBullet(data, targetFishId = null) {
@@ -537,6 +540,8 @@ class MainScene extends Phaser.Scene {
         let targetY = data.bullet.y;
         let targetFish = (targetFishId !== null) ? this.fishes.getChildren().find(fish => fish.getData('id') === targetFishId) : null;
 
+        console.log('data.bullet.x:', data.bullet.x, 'data.bullet.y:', data.bullet.y);
+        console.log('targetFish:', targetFish);
 
         if (data.bullet.type === 'missile') {
             bullet.setDisplaySize(200, 200);
@@ -549,8 +554,8 @@ class MainScene extends Phaser.Scene {
                 // 没有目标鱼，则飞向点击位置
                 let target = new Phaser.GameObjects.Sprite(this, targetX, targetY);
                 this.physics.moveToObject(bullet, target, config.bulletSpeed);
+                target.destroy();
             }
-
             // 设置一个定时器来模拟导弹飞行时间并在到达后爆炸
             this.time.delayedCall(500, () => {
                 this.explosionEffect(bullet, targetX, targetY, false);
@@ -568,7 +573,7 @@ class MainScene extends Phaser.Scene {
         this.cannonOpposite.rotation = rotation;
         this.sound.playAudioSprite('sfx', 'shot');
 
-        if (this.bulletType !== 'missile') {
+        if (data.bullet.type !== 'missile') {
             if (targetFish) {
                 bullet.targetFish = targetFish;  // 将目标鱼设置为子弹的属性
                 this.physics.moveToObject(bullet, targetFish, config.bulletSpeed);
