@@ -41,7 +41,12 @@ wss.on('connection', function connection(ws, req) {
 
         if (data.action === 'hit') {
             processHit(data).then(result => {
-                broadcastRoom(result, roomIndex); // 僅廣播到當前房間
+                if (result === null) {
+                    ws.send(JSON.stringify({action: 'error', message: '餘額不足'}));
+                    ws.close();
+                } else {
+                    broadcastRoom(result, roomIndex); // 僅廣播到當前房間
+                }
             });
         }
     });

@@ -79,6 +79,9 @@ class MainScene extends Phaser.Scene {
             this.cannon.rotation = Phaser.Math.Angle.BetweenPoints(this.cannon, pointer);
         });
 
+        this.betAmountIndex = 0; // Ensure this is set before using in updateBetDisplay
+        this.betAmountText = this.add.text(300, 40, `Bet: ${config.betAmounts[this.betAmountIndex]}`,this.getTextStyle());
+
         this.createAnimations();
         this.drawRoutes()
         this.createControlButtons();
@@ -158,6 +161,36 @@ class MainScene extends Phaser.Scene {
             toggleBulletTypeButton.setText(`Change Bullet: ${this.bulletType.toUpperCase()}`);
         });
         toggleBulletTypeButton.setData('button', true);
+
+        // Decrease bet button
+        const decreaseBetButton = this.add.text(230, 40, '-', this.getTextStyle()).setInteractive({useHandCursor: true});
+        decreaseBetButton.on('pointerdown', () => {
+            if (this.betAmountIndex === 0) {
+                this.betAmountIndex = config.betAmounts.length - 1; // Loop to the last amount
+            } else {
+                this.betAmountIndex--;
+            }
+            this.updateBetDisplay();
+        });
+
+        // Increase bet button
+        const increaseBetButton = this.add.text(260, 40, '+', this.getTextStyle()).setInteractive({useHandCursor: true});
+        increaseBetButton.on('pointerdown', () => {
+            if (this.betAmountIndex === config.betAmounts.length - 1) {
+                this.betAmountIndex = 0; // Loop back to the first amount
+            } else {
+                this.betAmountIndex++;
+            }
+            this.updateBetDisplay();
+        });
+    }
+
+    updateBetDisplay() {
+        if (this.betAmountText) { // Check if betAmountText is initialized
+            this.betAmountText.setText(`Bet: ${config.betAmounts[this.betAmountIndex]}`);
+        } else {
+            console.error('betAmountText is not initialized');
+        }
     }
 
     websocketHandler() {
@@ -608,7 +641,7 @@ class MainScene extends Phaser.Scene {
             ],
             bullet: {
                 id: bulletId,
-                bet: 5 //FIXME
+                bet: config.betAmounts[this.betAmountIndex]
             },
             position: this.playerPosition
         };
@@ -636,7 +669,7 @@ class MainScene extends Phaser.Scene {
             fishes: hitFishes,
             bullet: {
                 id: bulletId,
-                bet: 5 * hitFishes.length //FIXME
+                bet: hitFishes.length * config.betAmounts[this.betAmountIndex]
             },
             position: this.playerPosition
         };

@@ -69,7 +69,7 @@ async function processHit(data) {
         }
     } else {
         //Error Handling
-        console.log("Error: Player " + position + " does not have enough balance to bet " + bet);
+        console.log("Error: Player " + position + " does not have enough balance to bet " + bullet.bet);
         return null;
     }
 }

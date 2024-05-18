@@ -6,6 +6,7 @@ export let config = {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
     },
+    betAmounts: [10, 20, 30, 40, 50, 100, 200, 300, 500, 1000],
     bulletSpeed: 600,
     bulletMass: 0.1,
     fishSpeed: 100,
@@ -21,5 +22,5 @@ export let config = {
     backend: 'wss://uat.aspectgaming.com/fish',
     backend2: 'ws://uat.aspectgaming.com:8081',
     backendTest: 'ws://localhost:8080',
-    release: false
+    release: true
 };
