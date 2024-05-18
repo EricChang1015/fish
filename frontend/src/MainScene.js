@@ -479,21 +479,9 @@ class MainScene extends Phaser.Scene {
     }
 
     shootBullet(pointer, targetFish = null) {
-        const currentBalance = this.playerPosition === 0 ? this.cannon1Balance : this.cannon2Balance;
         const betAmount = config.betAmounts[this.betAmountIndex];
-        if (currentBalance < betAmount) {
-            console.log('Insufficient balance to fire bullet.'); // Or display a message to the player
-            return; // Exit the function to prevent firing the bullet
-        }
-
-        // Pre-deduct the bet amount from the player's balance
-        if (this.playerPosition === 0) {
-            this.cannon1Balance -= betAmount;
-            this.cannonBalanceText[0].setText(`Balance: ${this.cannon1Balance}`);
-        } else {
-            this.cannon2Balance -= betAmount;
-            this.cannonBalanceText[1].setText(`Balance: ${this.cannon2Balance}`);
-        }
+        if (!this.hasSufficientBalance(betAmount)) return;
+        this.deductBetAmount(betAmount)
 
         const bulletId = utils.generateRandomString(12);
         let bullet = this.bullets.create(this.cannon.x, this.cannon.y, 'bullet');
@@ -554,6 +542,26 @@ class MainScene extends Phaser.Scene {
             data.targetFishId = targetFish.getData('id');
         }
         this.ws.send(JSON.stringify({action: 'fireBullet', bullet: data, position: this.playerPosition,}));
+    }
+
+    hasSufficientBalance(betAmount) {
+        const currentBalance = this.playerPosition === 0 ? this.cannon1Balance : this.cannon2Balance;
+        if (currentBalance < betAmount) {
+            console.log('Insufficient balance to fire bullet.');
+            return false;
+        }
+        return true;
+    }
+
+    deductBetAmount(betAmount) {
+        // Pre-deduct the bet amount from the player's balance
+        if (this.playerPosition === 0) {
+            this.cannon1Balance -= betAmount;
+            this.cannonBalanceText[0].setText(`Balance: ${this.cannon1Balance}`);
+        } else {
+            this.cannon2Balance -= betAmount;
+            this.cannonBalanceText[1].setText(`Balance: ${this.cannon2Balance}`);
+        }
     }
 
     // Add a method to periodically check for bullets that have not hit and are no longer active
