@@ -204,9 +204,6 @@ class MainScene extends Phaser.Scene {
             let data = JSON.parse(event.data);
             if (data.result !== undefined) {
                 if (data.result.hit) {
-                    let position = data.result.position;
-                    let balance = data.result.balance;
-                    _this.cannonBalanceText[position].setText(`Balance: ${balance}`);
                     // 從fishes群組中獲取所有魚的數組
                     let fishesArray = _this.fishes.getChildren();
                     for (let hitFish of data.result.fishes) {
@@ -238,23 +235,26 @@ class MainScene extends Phaser.Scene {
                         }
                     }
 
-                } else {
-                    // update balance of player
+                }
+                // update balance of player
+                {
                     let position = data.result.position;
                     let balance = data.result.balance;
+                    _this[`cannon${position === 0 ? '1' : '2'}Balance`] = balance;
                     _this.cannonBalanceText[position].setText(`Balance: ${balance}`);
-
                 }
-
                 return;
             }
             switch (data.action) {
                 case 'setPosition':
+                    //{"action":"setPosition","room":0,"position":0,"balance":1000}
+                    const positionKey = data.position === 0 ? '1' : '2';
                     _this.RoomText.setText(`RoomId: ${data.room}`);
                     _this.playerPosition = data.position;
-                    // 根据分配的位置调整炮台位置
-                    this.cannon = this.playerPosition === 0 ? this.cannon1Head : this.cannon2Head;
-                    this.cannonOpposite = this.playerPosition === 0 ? this.cannon2Head : this.cannon1Head;
+                    _this.cannon = this[`cannon${positionKey}Head`];
+                    _this.cannonOpposite = this[`cannon${positionKey === '1' ? '2' : '1'}Head`];
+                    _this[`cannon${positionKey}Balance`] = data.balance;
+                    _this.cannonBalanceText[data.position].setText(`Balance: ${data.balance}`);
                     break;
                 case 'fireBullet': { // 接收新的炮弹数据并添加到bullets数组中
                     // here, only show other's bullet
@@ -321,18 +321,7 @@ class MainScene extends Phaser.Scene {
             }
         }
 
-        // 如果鎖定, 子彈導航到魚隻
-        this.bullets.getChildren().forEach(bullet => {
-            if (bullet.targetFish) {
-                let targetFish = this.fishes.getChildren().find(fish => fish.getData('id') === bullet.targetFish.getData('id'));
-                // 检查目标鱼是否已经不存在
-                if (targetFish == null) {
-                    bullet.targetFish = null;  // 目标丢失，子弹恢复默认行为
-                } else {
-                    this.physics.moveToObject(bullet, bullet.targetFish, config.bulletSpeed);
-                }
-            }
-        });
+        this.updateBullets();
 
         for (const fish of this.fishes.getChildren()) {
             if (Date.now() >= fish.getData('timestamp') + fish.getData('durationMS') && fish.active) {
@@ -490,6 +479,22 @@ class MainScene extends Phaser.Scene {
     }
 
     shootBullet(pointer, targetFish = null) {
+        const currentBalance = this.playerPosition === 0 ? this.cannon1Balance : this.cannon2Balance;
+        const betAmount = config.betAmounts[this.betAmountIndex];
+        if (currentBalance < betAmount) {
+            console.log('Insufficient balance to fire bullet.'); // Or display a message to the player
+            return; // Exit the function to prevent firing the bullet
+        }
+
+        // Pre-deduct the bet amount from the player's balance
+        if (this.playerPosition === 0) {
+            this.cannon1Balance -= betAmount;
+            this.cannonBalanceText[0].setText(`Balance: ${this.cannon1Balance}`);
+        } else {
+            this.cannon2Balance -= betAmount;
+            this.cannonBalanceText[1].setText(`Balance: ${this.cannon2Balance}`);
+        }
+
         const bulletId = utils.generateRandomString(12);
         let bullet = this.bullets.create(this.cannon.x, this.cannon.y, 'bullet');
         let targetX = pointer.x;
@@ -523,6 +528,10 @@ class MainScene extends Phaser.Scene {
         bullet.rotation = this.physics.moveToObject(bullet, { x: targetX, y: targetY }, config.bulletSpeed);
         bullet.body.mass = config.bulletMass;
         bullet.setData('id', bulletId);
+        bullet.setData('betAmount', betAmount); // Store the bet amount with the bullet
+        bullet.setData('position',this.playerPosition);
+        const bulletLifetime = 5000; // 5 seconds
+        bullet.setData('lifetime', this.time.now + bulletLifetime);
         // 子弹的碰撞检测
         if (this.bulletType !== 'missile') {
             this.physics.add.collider(bullet, this.fishes, this.hitFish, null, this);
@@ -545,6 +554,41 @@ class MainScene extends Phaser.Scene {
             data.targetFishId = targetFish.getData('id');
         }
         this.ws.send(JSON.stringify({action: 'fireBullet', bullet: data, position: this.playerPosition,}));
+    }
+
+    // Add a method to periodically check for bullets that have not hit and are no longer active
+    updateBullets() {
+        this.bullets.getChildren().forEach(bullet => {
+            if (bullet.targetFish) {
+                let targetFish = this.fishes.getChildren().find(fish => fish.getData('id') === bullet.targetFish.getData('id'));
+                // 检查目标鱼是否已经不存在
+                if (targetFish == null) {
+                    bullet.targetFish = null;  // 目标丢失，子弹恢复默认行为
+                } else {
+                    this.physics.moveToObject(bullet, bullet.targetFish, config.bulletSpeed);
+                }
+            }
+
+            // Check if the bullet has exceeded its lifetime or has moved off-screen
+            const isOffScreen = bullet.x < 0 || bullet.x > config.width || bullet.y < 0 || bullet.y > config.height;
+            if (this.time.now > bullet.getData('lifetime') || isOffScreen) {
+                bullet.active = false; // Manually set the bullet to inactive
+            }
+
+            // Now, check the bullet's custom active state for refund logic
+            if (!bullet.active) {
+                // Refund logic...
+                const betAmount = bullet.getData('betAmount');
+                if (this.playerPosition === 0) {
+                    this.cannon1Balance += betAmount;
+                    this.cannonBalanceText[0].setText(`Balance: ${this.cannon1Balance}`);
+                } else {
+                    this.cannon2Balance += betAmount;
+                    this.cannonBalanceText[1].setText(`Balance: ${this.cannon2Balance}`);
+                }
+                bullet.destroy(); // Remove the bullet from the game
+            }
+        });
     }
 
     explosionEffect(bullet, x, y, shoot = true) {
@@ -602,6 +646,7 @@ class MainScene extends Phaser.Scene {
         bullet.time = Date.now();
         bullet.rotation = rotation;
         bullet.body.mass = config.bulletMass;
+        bullet.setData('position', data.position);
         this.physics.velocityFromRotation(rotation, speed, bullet.body.velocity);
         this.cannonOpposite.rotation = rotation;
         this.sound.playAudioSprite('sfx', 'shot');
